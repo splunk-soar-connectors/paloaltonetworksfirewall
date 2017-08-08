@@ -26,8 +26,6 @@ import re
 import time
 import json
 
-requests.packages.urllib3.disable_warnings()
-
 
 class PanConnector(BaseConnector):
 
