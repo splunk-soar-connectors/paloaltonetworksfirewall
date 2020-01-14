@@ -15,7 +15,7 @@
     "python_version": "3",
     "logo": "logo_paloaltonetworks.svg",
     "logo_dark": "logo_paloaltonetworks_dark.svg",
-    "license": "Copyright (c) 2015-2020 Splunk Inc.",
+    "license": "Copyright (c) 2014-2020 Splunk Inc.",
     "configuration": {
         "device": {
             "data_type": "string",
