@@ -190,7 +190,7 @@ class PanConnector(BaseConnector):
             self.append_to_message(PAN_ERR_TEST_CONNECTIVITY_FAILED)
             return self.get_status()
 
-        self.append_to_message(PAN_SUCC_TEST_CONNECTIVITY_PASSED)
+        self.set_status_save_progress(phantom.APP_SUCCESS, PAN_SUCC_TEST_CONNECTIVITY_PASSED)
         return self.get_status()
 
     def _make_rest_call(self, data, action_result):
