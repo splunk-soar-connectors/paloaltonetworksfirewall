@@ -1,5 +1,5 @@
 # File: pan_connector.py
-# Copyright (c) 2014-2020 Splunk Inc.
+# Copyright (c) 2014-2021 Splunk Inc.
 #
 # SPLUNK CONFIDENTIAL - Use or disclosure of this material in whole or in part
 # without a valid written license from Splunk Inc. is PROHIBITED.
@@ -59,7 +59,7 @@ class PanConnector(BaseConnector):
         # parse it as a dictionary
         if (isinstance(msg, dict)):
             line = msg.get('line')
-            if (line is None):
+            if line is None:
                 return
             if (isinstance(line, list)):
                 action_result.append_to_message("message: '{}'".format(', '.join(line)))
@@ -67,8 +67,11 @@ class PanConnector(BaseConnector):
                 action_result.append_to_message("message: '{}'".format(line))
             return
 
+        # Covert msg from bytes to str type
+        if type(msg) == bytes:
+            msg = msg.decode('uft-8')
         # parse it as a string
-        if (type(msg) == str) or (type(msg) == unicode):
+        if type(msg) == str:
             action_result.append_to_message("message: '{}'".format(msg))
 
         return
@@ -80,35 +83,35 @@ class PanConnector(BaseConnector):
 
         response = response_dict.get('response')
 
-        if (response is None):
+        if response is None:
             return action_result.set_status(phantom.APP_ERROR, PAN_ERR_REPLY_FORMAT_KEY_MISSING.format(key='response'))
 
         status = response.get('@status')
 
-        if (status is None):
+        if status is None:
             return action_result.set_status(phantom.APP_ERROR, PAN_ERR_REPLY_FORMAT_KEY_MISSING.format(key='response/status'))
 
-        if (status != 'success'):
+        if status != 'success':
             action_result.set_status(phantom.APP_ERROR, PAN_ERR_REPLY_NOT_SUCCESS.format(status=status))
         else:
             action_result.set_status(phantom.APP_SUCCESS, PAN_SUCC_REST_CALL_SUCCEEDED)
 
         code = response.get('@code')
-        if (code is not None):
+        if code is not None:
             action_result.append_to_message("code: '{}'".format(code))
 
         self._parse_response_msg(response, action_result)
 
         result = response.get('result')
 
-        if (result is not None):
+        if result is not None:
             action_result.add_data(result)
 
         return action_result.get_status()
 
     def _get_key(self):
 
-        if (self._key is not None):
+        if self._key is not None:
             # key already created for this call
             return phantom.APP_SUCCESS
 
@@ -137,17 +140,17 @@ class PanConnector(BaseConnector):
 
         response = response_dict.get('response')
 
-        if (response is None):
+        if response is None:
             message = PAN_ERR_REPLY_FORMAT_KEY_MISSING.format(key='response')
             return self.set_status(phantom.APP_ERROR, message)
 
         status = response.get('@status')
 
-        if (status is None):
+        if status is None:
             message = PAN_ERR_REPLY_FORMAT_KEY_MISSING.format(key='response/status')
             return self.set_status(phantom.APP_ERROR, message)
 
-        if (status != 'success'):
+        if status != 'success':
             message = PAN_ERR_REPLY_NOT_SUCCESS.format(status=status)
             json_resp = json.dumps(response).replace('{', ':')
             json_resp = json_resp.replace('}', '')
@@ -156,13 +159,13 @@ class PanConnector(BaseConnector):
 
         result = response.get('result')
 
-        if (result is None):
+        if result is None:
             message = PAN_ERR_REPLY_FORMAT_KEY_MISSING.format(key='response/result')
             return self.set_status(phantom.APP_ERROR, message)
 
         key = result.get('key')
 
-        if (key is None):
+        if key is None:
             message = PAN_ERR_REPLY_FORMAT_KEY_MISSING.format(key='response/result/key')
             return self.set_status(phantom.APP_ERROR, message)
 
@@ -240,28 +243,28 @@ class PanConnector(BaseConnector):
 
         entries = rules.get('entry')
 
-        if (entries is None):
+        if entries is None:
             # Just means no rules have been configured
             return (action_result.set_status(phantom.APP_ERROR, PAN_ERR_NO_POLICY_ENTRIES_FOUND), ret_name)
 
         # Convert entries into array, if it's a dict (this will happen if there is only one rule)
         if (isinstance(entries, dict)):
             entry_list = []
-            entry_list[0] = entries
+            entry_list.append(entries)
             entries = entry_list
 
         for entry in entries:
             action = entry['action']
-            if (action is None):
+            if action is None:
                 continue
             if (isinstance(action, dict)):
                 action = action['#text']
 
-            if (action == 'allow'):
+            if action == 'allow':
                 ret_name = entry['@name']
                 break
 
-        if (ret_name is None):
+        if ret_name is None:
             return (action_result.set_status(phantom.APP_ERROR, PAN_ERR_NO_ALLOW_POLICY_ENTRIES_FOUND), ret_name)
 
         return (action_result.set_status(phantom.APP_SUCCESS), ret_name)
@@ -275,7 +278,7 @@ class PanConnector(BaseConnector):
 
         self.debug_print("Creating Security Policy", sec_policy_name)
 
-        if (type != SEC_POL_URL_TYPE):
+        if type != SEC_POL_URL_TYPE:
             return action_result.set_status(phantom.APP_ERROR, PAN_ERR_CREATE_UNKNOWN_TYPE_SEC_POL)
 
         # The URL policy is actually an 'allow' policy, which uses a URL Profile with block lists.
@@ -284,7 +287,7 @@ class PanConnector(BaseConnector):
         # So get the list of all the security policies, we need to parse through them to get the first 'allow'
         # However if the user has already supplied a policy name, then use that.
 
-        if (allow_rule_name is None):
+        if allow_rule_name is None:
             data = {'type': 'config',
                     'action': 'get',
                     'key': self._key,
@@ -326,7 +329,7 @@ class PanConnector(BaseConnector):
         if (phantom.is_fail(status)):
             return action_result.get_status()
 
-        if (allow_rule_name == sec_policy_name):
+        if allow_rule_name == sec_policy_name:
             # We are the first allow rule, so no need to move
             return action_result.get_status()
 
@@ -365,17 +368,17 @@ class PanConnector(BaseConnector):
 
         self.debug_print("Creating Security Policy", sec_policy_name)
 
-        if (type == SEC_POL_URL_TYPE):
+        if type == SEC_POL_URL_TYPE:
             # URL needs to be handled differently
             return self._add_url_security_policy(vsys, action_result, type, name)
-        elif(type == SEC_POL_IP_TYPE):
+        elif type == SEC_POL_IP_TYPE:
             element += ACTION_NODE_DENY
             element += APP_GRP_SEC_POL_ELEM.format(app_group_name="any")
             if use_source:
                 element += IP_GRP_SEC_POL_ELEM_SRC.format(ip_group_name=block_ip_grp)
             else:
                 element += IP_GRP_SEC_POL_ELEM.format(ip_group_name=BLOCK_IP_GROUP_NAME)
-        elif(type == SEC_POL_APP_TYPE):
+        elif type == SEC_POL_APP_TYPE:
             element += ACTION_NODE_DENY
             element += APP_GRP_SEC_POL_ELEM.format(app_group_name=name)
             element += IP_GRP_SEC_POL_ELEM.format(ip_group_name="any")
@@ -462,7 +465,7 @@ class PanConnector(BaseConnector):
             # get the result_data and the job status
             result_data = status_action_result.get_data()
             job = result_data[0]['job']
-            if (job['status'] == 'FIN'):
+            if job['status'] == 'FIN':
                 break
 
             # send the % progress
@@ -581,7 +584,7 @@ class PanConnector(BaseConnector):
             return DEL_APP_XPATH.format(app_name=app_name)
 
         # Decide based on major version number
-        if (major_version <= 6):
+        if major_version <= 6:
             return DEL_APP_XPATH_VER6.format(app_name=app_name)
 
         return DEL_APP_XPATH.format(app_name=app_name)
@@ -597,7 +600,7 @@ class PanConnector(BaseConnector):
             return APP_GRP_ELEM.format(app_name=app_name)
 
         # Decide based on major version number
-        if (major_version <= 6):
+        if major_version <= 6:
             return APP_GRP_ELEM_VER6.format(app_name=app_name)
 
         return APP_GRP_ELEM.format(app_name=app_name)
@@ -667,13 +670,13 @@ class PanConnector(BaseConnector):
             return (action_result.get_status(), name)
 
         # Try to figure out the type of ip
-        if (block_ip.find('/') != -1):
+        if block_ip.find('/') != -1:
             type = 'ip-netmask'
-        elif (block_ip.find('-') != -1):
+        elif block_ip.find('-') != -1:
             type = 'ip-range'
         elif (phantom.is_ip(block_ip)):
             type = 'ip-netmask'
-        elif(phantom.is_hostname(block_ip)):
+        elif (phantom.is_hostname(block_ip)):
             type = 'fqdn'
         else:
             return (action_result.set_status(phantom.APP_ERROR, PAN_ERR_INVALID_IP_FORMAT), name)
@@ -881,21 +884,21 @@ class PanConnector(BaseConnector):
 
         self._param = param
 
-        if (action == phantom.ACTION_ID_TEST_ASSET_CONNECTIVITY):
+        if action == phantom.ACTION_ID_TEST_ASSET_CONNECTIVITY:
             result = self._test_connectivity(param)
-        elif (action == self.ACTION_ID_BLOCK_URL):
+        elif action == self.ACTION_ID_BLOCK_URL:
             result = self._block_url(param)
-        elif (action == self.ACTION_ID_UNBLOCK_URL):
+        elif action == self.ACTION_ID_UNBLOCK_URL:
             result = self._unblock_url(param)
-        elif (action == self.ACTION_ID_BLOCK_APPLICATION):
+        elif action == self.ACTION_ID_BLOCK_APPLICATION:
             result = self._block_application(param)
-        elif (action == self.ACTION_ID_UNBLOCK_APPLICATION):
+        elif action == self.ACTION_ID_UNBLOCK_APPLICATION:
             result = self._unblock_application(param)
-        elif (action == self.ACTION_ID_BLOCK_IP):
+        elif action == self.ACTION_ID_BLOCK_IP:
             result = self._block_ip(param)
-        elif (action == self.ACTION_ID_UNBLOCK_IP):
+        elif action == self.ACTION_ID_UNBLOCK_IP:
             result = self._unblock_ip(param)
-        elif (action == self.ACTION_ID_LIST_APPS):
+        elif action == self.ACTION_ID_LIST_APPS:
             result = self._list_apps(param)
 
         return result
@@ -926,7 +929,7 @@ if __name__ == '__main__':
         import getpass
         password = getpass.getpass("Password: ")
 
-    if (username and password):
+    if username and password:
         try:
             print("Accessing the Login page")
             login_url = BaseConnector._get_phantom_base_url() + 'login'
@@ -957,7 +960,7 @@ if __name__ == '__main__':
         connector = PanConnector()
         connector.print_progress_message = True
 
-        if (session_id is not None):
+        if session_id is not None:
             in_json['user_session_token'] = session_id
             connector._set_csrf_info(csrftoken, headers['Referer'])
 
