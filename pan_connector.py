@@ -53,15 +53,15 @@ class PanConnector(BaseConnector):
 
         msg = response.get('msg')
 
-        if (msg is None):
+        if msg is None:
             return
 
         # parse it as a dictionary
-        if (isinstance(msg, dict)):
+        if isinstance(msg, dict):
             line = msg.get('line')
             if line is None:
                 return
-            if (isinstance(line, list)):
+            if isinstance(line, list):
                 action_result.append_to_message("message: '{}'".format(', '.join(line)))
             else:
                 action_result.append_to_message("message: '{}'".format(line))
@@ -175,7 +175,7 @@ class PanConnector(BaseConnector):
 
         ret_val = self._validate_version(ver_ar)
 
-        if (phantom.is_fail(ret_val)):
+        if phantom.is_fail(ret_val):
             self.set_status(ret_val, ver_ar.get_message())
             self.append_to_message(PAN_ERR_TEST_CONNECTIVITY_FAILED)
             return self.get_status()
@@ -189,7 +189,7 @@ class PanConnector(BaseConnector):
 
         status = self._get_key()
 
-        if (phantom.is_fail(status)):
+        if phantom.is_fail(status):
             self.append_to_message(PAN_ERR_TEST_CONNECTIVITY_FAILED)
             return self.get_status()
 
@@ -224,7 +224,7 @@ class PanConnector(BaseConnector):
 
         status = self._parse_response(response_dict, action_result)
 
-        if (phantom.is_fail(status)):
+        if phantom.is_fail(status):
             return action_result.get_status()
 
         return action_result.get_status()
@@ -234,7 +234,7 @@ class PanConnector(BaseConnector):
         ret_name = None
         result_data = action_result.get_data()
 
-        if (len(result_data) == 0):
+        if len(result_data) == 0:
             return (action_result.set_status(phantom.APP_ERROR, PAN_ERR_PARSE_POLICY_DATA), ret_name)
 
         result_data = result_data[0]
@@ -248,7 +248,7 @@ class PanConnector(BaseConnector):
             return (action_result.set_status(phantom.APP_ERROR, PAN_ERR_NO_POLICY_ENTRIES_FOUND), ret_name)
 
         # Convert entries into array, if it's a dict (this will happen if there is only one rule)
-        if (isinstance(entries, dict)):
+        if isinstance(entries, dict):
             entry_list = []
             entry_list.append(entries)
             entries = entry_list
@@ -257,7 +257,7 @@ class PanConnector(BaseConnector):
             action = entry['action']
             if action is None:
                 continue
-            if (isinstance(action, dict)):
+            if isinstance(action, dict):
                 action = action['#text']
 
             if action == 'allow':
@@ -297,14 +297,14 @@ class PanConnector(BaseConnector):
 
             status = self._make_rest_call(data, policy_list_act_res)
 
-            if (phantom.is_fail(status)):
+            if phantom.is_fail(status):
                 return action_result.set_status(policy_list_act_res.get_status(), policy_list_act_res.get_message())
 
             self.debug_print("Get Policies Action Result", policy_list_act_res)
 
             status, allow_rule_name = self._get_first_allow_policy(policy_list_act_res)
 
-            if (phantom.is_fail(status)):
+            if phantom.is_fail(status):
                 return action_result.set_status(status, policy_list_act_res.get_message())
 
         self.debug_print("allow_rule_name", allow_rule_name)
@@ -326,7 +326,7 @@ class PanConnector(BaseConnector):
 
         status = self._make_rest_call(data, action_result)
 
-        if (phantom.is_fail(status)):
+        if phantom.is_fail(status):
             return action_result.get_status()
 
         if allow_rule_name == sec_policy_name:
@@ -347,10 +347,10 @@ class PanConnector(BaseConnector):
 
         status = self._make_rest_call(data, move_action_result)
 
-        if (phantom.is_fail(status)):
+        if phantom.is_fail(status):
             # check if we also treat this error as an error
             msg = move_action_result.get_message()
-            if (msg.find('already at the top') == -1):
+            if msg.find('already at the top') == -1:
                 # looks like an error that we should report
                 action_result.set_status(move_action_result.get_status(), move_action_result.get_message())
                 return action_result.get_status()
@@ -396,7 +396,7 @@ class PanConnector(BaseConnector):
 
         status = self._make_rest_call(data, action_result)
 
-        if (phantom.is_fail(status)):
+        if phantom.is_fail(status):
             return action_result.get_status()
 
         # move it to the top
@@ -412,10 +412,10 @@ class PanConnector(BaseConnector):
 
         status = self._make_rest_call(data, move_action_result)
 
-        if (phantom.is_fail(status)):
+        if phantom.is_fail(status):
             # check if we also treat this error as an error
             msg = move_action_result.get_message()
-            if (msg.find('already at the top') == -1):
+            if msg.find('already at the top') == -1:
                 # looks like an error that we should report
                 action_result.set_status(move_action_result.get_status(), move_action_result.get_message())
                 return action_result.get_status()
@@ -432,14 +432,14 @@ class PanConnector(BaseConnector):
 
         status = self._make_rest_call(data, action_result)
 
-        if (phantom.is_fail(status)):
+        if phantom.is_fail(status):
             return action_result.get_status()
 
         # Get the job id of the commit call from the result_data, also pop it since we don't need it
         # to be in the action result
         result_data = action_result.get_data()
 
-        if (len(result_data) == 0):
+        if len(result_data) == 0:
             return action_result.get_status()
 
         result_data = result_data.pop(0)
@@ -456,7 +456,7 @@ class PanConnector(BaseConnector):
 
             status = self._make_rest_call(data, status_action_result)
 
-            if (phantom.is_fail(status)):
+            if phantom.is_fail(status):
                 action_result.set_status(phantom.APP_SUCCESS, status_action_result.get_message())
                 return action_result.get_status()
 
@@ -479,7 +479,7 @@ class PanConnector(BaseConnector):
 
         status = self._get_key()
 
-        if (phantom.is_fail(status)):
+        if phantom.is_fail(status):
             return self.get_status()
 
         action_result = self.add_action_result(ActionResult(dict(param)))
@@ -500,7 +500,7 @@ class PanConnector(BaseConnector):
 
         status = self._make_rest_call(data, action_result)
 
-        if (phantom.is_fail(status)):
+        if phantom.is_fail(status):
             return action_result.get_status()
 
         # Now Commit the config
@@ -512,7 +512,7 @@ class PanConnector(BaseConnector):
 
         status = self._get_key()
 
-        if (phantom.is_fail(status)):
+        if phantom.is_fail(status):
             return self.get_status()
 
         action_result = self.add_action_result(ActionResult(dict(param)))
@@ -529,13 +529,13 @@ class PanConnector(BaseConnector):
 
         status = self._make_rest_call(data, action_result)
 
-        if (phantom.is_fail(status)):
+        if phantom.is_fail(status):
             return action_result.get_status()
 
         # Create the policy
         status = self._add_security_policy(vsys, action_result, SEC_POL_URL_TYPE)
 
-        if (phantom.is_fail(status)):
+        if phantom.is_fail(status):
             return action_result.get_status()
 
         # Now Commit the config
@@ -547,7 +547,7 @@ class PanConnector(BaseConnector):
 
         status = self._get_key()
 
-        if (phantom.is_fail(status)):
+        if phantom.is_fail(status):
             return self.get_status()
 
         action_result = self.add_action_result(ActionResult(dict(param)))
@@ -565,7 +565,7 @@ class PanConnector(BaseConnector):
 
         status = self._make_rest_call(data, action_result)
 
-        if (phantom.is_fail(status)):
+        if phantom.is_fail(status):
             return action_result.get_status()
 
         # Now Commit the config
@@ -609,7 +609,7 @@ class PanConnector(BaseConnector):
 
         status = self._get_key()
 
-        if (phantom.is_fail(status)):
+        if phantom.is_fail(status):
             return self.get_status()
 
         action_result = self.add_action_result(ActionResult(dict(param)))
@@ -627,13 +627,13 @@ class PanConnector(BaseConnector):
 
         status = self._make_rest_call(data, action_result)
 
-        if (phantom.is_fail(status)):
+        if phantom.is_fail(status):
             return action_result.get_status()
 
         # Create the policy
         status = self._add_security_policy(vsys, action_result, SEC_POL_APP_TYPE, BLOCK_APP_GROUP_NAME)
 
-        if (phantom.is_fail(status)):
+        if phantom.is_fail(status):
             return action_result.get_status()
 
         # Now Commit the config
@@ -666,7 +666,7 @@ class PanConnector(BaseConnector):
 
         status = self._make_rest_call(data, action_result)
 
-        if (phantom.is_fail(status)):
+        if phantom.is_fail(status):
             return (action_result.get_status(), name)
 
         # Try to figure out the type of ip
@@ -674,9 +674,9 @@ class PanConnector(BaseConnector):
             type = 'ip-netmask'
         elif block_ip.find('-') != -1:
             type = 'ip-range'
-        elif (phantom.is_ip(block_ip)):
+        elif phantom.is_ip(block_ip):
             type = 'ip-netmask'
-        elif (phantom.is_hostname(block_ip)):
+        elif phantom.is_hostname(block_ip):
             type = 'fqdn'
         else:
             return (action_result.set_status(phantom.APP_ERROR, PAN_ERR_INVALID_IP_FORMAT), name)
@@ -693,7 +693,7 @@ class PanConnector(BaseConnector):
 
         status = self._make_rest_call(data, action_result)
 
-        if (phantom.is_fail(status)):
+        if phantom.is_fail(status):
             return (action_result.get_status(), name)
 
         return (phantom.APP_SUCCESS, name)
@@ -702,7 +702,7 @@ class PanConnector(BaseConnector):
 
         status = self._get_key()
 
-        if (phantom.is_fail(status)):
+        if phantom.is_fail(status):
             return self.get_status()
 
         action_result = self.add_action_result(ActionResult(dict(param)))
@@ -732,7 +732,7 @@ class PanConnector(BaseConnector):
 
         status = self._make_rest_call(data, action_result)
 
-        if (phantom.is_fail(status)):
+        if phantom.is_fail(status):
             return action_result.get_status()
 
         # Now Commit the config
@@ -744,7 +744,7 @@ class PanConnector(BaseConnector):
 
         status = self._get_key()
 
-        if (phantom.is_fail(status)):
+        if phantom.is_fail(status):
             return self.get_status()
 
         action_result = self.add_action_result(ActionResult(dict(param)))
@@ -765,7 +765,7 @@ class PanConnector(BaseConnector):
 
         status, addr_name = self._add_address(vsys, block_ip, action_result)
 
-        if (phantom.is_fail(status)):
+        if phantom.is_fail(status):
             return action_result.get_status()
 
         # Add the address to the phantom address group
@@ -777,13 +777,13 @@ class PanConnector(BaseConnector):
 
         status = self._make_rest_call(data, action_result)
 
-        if (phantom.is_fail(status)):
+        if phantom.is_fail(status):
             return action_result.get_status()
 
         # Create the policy
         status = self._add_security_policy(vsys, action_result, SEC_POL_IP_TYPE, use_source=use_source, block_ip_grp=block_ip_grp)
 
-        if (phantom.is_fail(status)):
+        if phantom.is_fail(status):
             return action_result.get_status()
 
         # Now Commit the config
@@ -795,7 +795,7 @@ class PanConnector(BaseConnector):
 
         status = self._get_key()
 
-        if (phantom.is_fail(status)):
+        if phantom.is_fail(status):
             return self.get_status()
 
         action_result = self.add_action_result(ActionResult(dict(param)))
@@ -808,7 +808,7 @@ class PanConnector(BaseConnector):
 
         status = self._make_rest_call(data, action_result)
 
-        if (phantom.is_fail(status)):
+        if phantom.is_fail(status):
             return action_result.get_status()
 
         try:
@@ -837,7 +837,7 @@ class PanConnector(BaseConnector):
 
         status = self._make_rest_call(data, ver_ar)
 
-        if (phantom.is_fail(status)):
+        if phantom.is_fail(status):
             action_result.set_status(ver_ar.get_status(), ver_ar.get_message())
             return action_result.get_status()
 
@@ -850,20 +850,20 @@ class PanConnector(BaseConnector):
             self.debug_print("Handled exception while parsing sw-version", e)
             return action_result.set_status(phantom.APP_ERROR, "Unable to parse system info response")
 
-        if (not device_version):
+        if not device_version:
             return action_result.set_status(phantom.APP_ERROR, "Unable to get version from the device")
 
         self.save_progress("Got device version: {0}".format(device_version))
 
         # get the configured version regex
         version_regex = self.get_product_version_regex()
-        if (not version_regex):
+        if not version_regex:
             # assume that it matches
             return phantom.APP_SUCCESS
 
         match = re.match(version_regex, device_version)
 
-        if (not match):
+        if not match:
             message = "Version validation failed for App supported version '{0}'".format(version_regex)
             # self.save_progress(message)
             return action_result.set_status(phantom.APP_ERROR, message)
@@ -923,7 +923,7 @@ if __name__ == '__main__':
     username = args.username
     password = args.password
 
-    if (username is not None and password is None):
+    if username is not None and password is None:
 
         # User specified a username but not a password, so ask
         import getpass
