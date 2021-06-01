@@ -69,7 +69,7 @@ class PanConnector(BaseConnector):
 
         # Covert msg from bytes to str type
         if type(msg) == bytes:
-            msg = msg.decode('uft-8')
+            msg = msg.decode('utf-8')
         # parse it as a string
         if type(msg) == str:
             action_result.append_to_message("message: '{}'".format(msg))
