@@ -16,6 +16,7 @@
         "On prem, Software Version 8.0.8"
     ],
     "python_version": "3",
+    "fips_compliant": true,
     "logo": "logo_paloaltonetworks.svg",
     "logo_dark": "logo_paloaltonetworks_dark.svg",
     "license": "Copyright (c) 2014-2021 Splunk Inc.",
@@ -65,7 +66,7 @@
             "identifier": "block_url",
             "read_only": false,
             "undo": "unblock url",
-            "verbose": "This action does the following to block an URL:<ul><li>Create an URL Filtering profile object named <b>Phantom URL List</b>, if not found.</li><li>Add the URL to block to this profile.</li><li>Re-Configure the policy <b>Phantom URL Security Policy</b> to use the created URL Filtering profile.<br>The policy is created if not found.</li><li>Move the policy above the <b>sec_policy</b> if specified, else move it before the first detected <i>allow</i> policy.</li><li>The action then proceeds to <b>commit</b> the changes.</li></ul>NOTE: Multiple <b>block url</b> actions will <i>not</i> result in multiple policies.<br>The <b>Phantom URL Security Policy</b> policy is created with the following properties:<br><ul><li>from: any</li><li>to: any</li><li>source: any</li><li>destination: any</li><li>source-user: any</li><li>category: any</li><li>service: application-default</li><li>hip-profiles: any</li><li>description: Created by Phantom, please don't edit</li><li>action: allow</li><li>application: any</li></ul>",
+            "verbose": "This action does the following to block an URL:<ul><li>Create an URL Filtering profile object named <b>Phantom URL List</b>, if not found.</li><li>Add the URL to block to this profile.</li><li>Re-Configure the policy <b>Phantom URL Security Policy</b> to use the created URL Filtering profile.<br>The policy is created if not found.</li><li>Move the policy above the <b>sec_policy</b> if specified, else move it before the first detected <i>allow</i> policy.</li><li>The action then proceeds to <b>commit</b> the changes.</li></ul>NOTE: Multiple <b>block url</b> actions will <i>not</i> result in multiple policies.<br>The <b>Phantom URL Security Policy</b> policy is created with the following properties:<br><ul><li>from: any</li><li>to: any</li><li>source: any</li><li>destination: any</li><li>source-user: any</li><li>category: any</li><li>service: application-default</li><li>hip-profiles: any</li><li>description: Created by Phantom, please don't edit</li><li>action: allow</li><li>application: any</li></ul>.",
             "parameters": {
                 "url": {
                     "description": "URL to block",
