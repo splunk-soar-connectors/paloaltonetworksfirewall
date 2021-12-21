@@ -1,0 +1,19 @@
+Splunk SOAR Palo Alto Networks Firewall
+Copyright 2021 Splunk Inc.
+
+Third-party Software Attributions:
+
+Library: xmltodict
+Version: 0.12.0
+License: MIT
+Copyright 2012 Martin Blech and individual contributors
+
+Library: pudb
+Version: 2019.2
+License: MIT
+Copyright 2009 Andreas Kloeckner and contributors
+
+Library: requests
+Version: 2.25.0
+License: Apache 2.0
+Kenneth Reitz
