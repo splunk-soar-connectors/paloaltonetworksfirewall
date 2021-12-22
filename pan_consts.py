@@ -112,5 +112,3 @@ TAG_ELEM = "<entry name='{tag}'><color>{tag_color}</color><comments>{tag_comment
 
 APP_LIST_XPATH = "/config/predefined/application"
 SHOW_SYSTEM_INFO = "<show><system><info></info></system></show>"
-
-PAN_DEFAULT_TIMEOUT = 30

@@ -16,7 +16,6 @@
 #
 import json
 import re
-import sys
 import time
 
 import phantom.app as phantom
@@ -134,7 +133,7 @@ class PanConnector(BaseConnector):
         data = {'type': 'keygen', 'user': username, 'password': password}
 
         try:
-            response = requests.post(self._base_url, data=data, verify=config[phantom.APP_JSON_VERIFY], timeout=PAN_DEFAULT_TIMEOUT)
+            response = requests.post(self._base_url, data=data, verify=config[phantom.APP_JSON_VERIFY])
         except Exception as e:
             self.debug_print(PAN_ERR_DEVICE_CONNECTIVITY, e)
             return self.set_status(phantom.APP_ERROR, PAN_ERR_DEVICE_CONNECTIVITY, e)
@@ -214,7 +213,7 @@ class PanConnector(BaseConnector):
         config = self.get_config()
 
         try:
-            response = requests.post(self._base_url, data=data, verify=config[phantom.APP_JSON_VERIFY], timeout=PAN_DEFAULT_TIMEOUT)
+            response = requests.post(self._base_url, data=data, verify=config[phantom.APP_JSON_VERIFY])
         except Exception as e:
             self.debug_print(PAN_ERR_DEVICE_CONNECTIVITY, e)
             return action_result.set_status(phantom.APP_ERROR, PAN_ERR_DEVICE_CONNECTIVITY, e)
@@ -926,14 +925,12 @@ if __name__ == '__main__':
     argparser.add_argument('input_test_json', help='Input Test JSON file')
     argparser.add_argument('-u', '--username', help='username', required=False)
     argparser.add_argument('-p', '--password', help='password', required=False)
-    argparser.add_argument('-v', '--verify', action='store_true', help='verify', required=False, default=False)
 
     args = argparser.parse_args()
     session_id = None
 
     username = args.username
     password = args.password
-    verify = args.verify
 
     if username is not None and password is None:
 
@@ -945,7 +942,7 @@ if __name__ == '__main__':
         try:
             print("Accessing the Login page")
             login_url = BaseConnector._get_phantom_base_url() + 'login'
-            r = requests.get(login_url, verify=verify, timeout=PAN_DEFAULT_TIMEOUT)
+            r = requests.get(login_url, verify=False)
             csrftoken = r.cookies['csrftoken']
 
             data = dict()
@@ -958,11 +955,11 @@ if __name__ == '__main__':
             headers['Referer'] = login_url
 
             print("Logging into Platform to get the session id")
-            r2 = requests.post(login_url, verify=verify, data=data, headers=headers, timeout=PAN_DEFAULT_TIMEOUT)
+            r2 = requests.post(login_url, verify=False, data=data, headers=headers)
             session_id = r2.cookies['sessionid']
         except Exception as e:
             print("Unable to get session id from the platfrom. Error: " + str(e))
-            sys.exit(1)
+            exit(1)
 
     with open(args.input_test_json) as f:
         in_json = f.read()
@@ -979,4 +976,4 @@ if __name__ == '__main__':
         ret_val = connector._handle_action(json.dumps(in_json), None)
         print(json.dumps(json.loads(ret_val), indent=4))
 
-    sys.exit(0)
+    exit(0)
