@@ -37,7 +37,7 @@ PAN_JSON_IP = "ip"
 PAN_JSON_TOTAL_APPLICATIONS = "total_applications"
 PAN_JSON_SEC_POLICY = "sec_policy"
 PAN_JSON_SOURCE_ADDRESS = "is_source_address"
-PAN_DEFAULT_SOURCE_ADDRESS = False
+PAN_DEFAULT_SOURCE_ADDRESS = ""
 
 # Name consts
 SEC_POL_NAME = "Phantom {type} Security Policy"
