@@ -1,6 +1,6 @@
 # File: pan_connector.py
 #
-# Copyright (c) 2014-2021 Splunk Inc.
+# Copyright (c) 2014-2022 Splunk Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,19 +14,17 @@
 # and limitations under the License.
 #
 #
-# Phantom imports
-import phantom.app as phantom
-from phantom.base_connector import BaseConnector
-from phantom.action_result import ActionResult
-
-# THIS Connector imports
-from pan_consts import *
-
-import requests
-import xmltodict
+import json
 import re
 import time
-import json
+
+import phantom.app as phantom
+import requests
+import xmltodict
+from phantom.action_result import ActionResult
+from phantom.base_connector import BaseConnector
+
+from pan_consts import *
 
 
 class PanConnector(BaseConnector):
@@ -916,8 +914,9 @@ class PanConnector(BaseConnector):
 
 if __name__ == '__main__':
 
-    import pudb
     import argparse
+
+    import pudb
 
     pudb.set_trace()
 
