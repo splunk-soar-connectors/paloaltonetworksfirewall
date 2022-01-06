@@ -1,6 +1,6 @@
 # File: pan_connector.py
 #
-# Copyright (c) 2014-2021 Splunk Inc.
+# Copyright (c) 2014-2022 Splunk Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 #
 #
 # Phantom imports
+from os import stat
 import phantom.app as phantom
 from phantom.base_connector import BaseConnector
 from phantom.action_result import ActionResult
@@ -39,6 +40,9 @@ class PanConnector(BaseConnector):
     ACTION_ID_BLOCK_IP = "block_ip"
     ACTION_ID_UNBLOCK_IP = "unblock_ip"
     ACTION_ID_LIST_APPS = "list_apps"
+    ACTION_ID_GET_USER_INFO = "get_user_info"
+    ACTION_ID_LOGOUT_GPFW_USER = "logout_gpfw_user"
+    ACTION_ID_SHOW_HA_STATUS = "show_ha_status"
 
     def __init__(self):
 
@@ -50,14 +54,122 @@ class PanConnector(BaseConnector):
         self._param = None
         self._device_version = None
 
+    def _just_get_key(self):
+        if self._key:
+            self.save_progress('Got API Key from asset configuration')
+            return phantom.APP_SUCCESS
+        self.save_progress('Trying to get API Key from node1, {} seconds timeout'.format(self._timeout))
+        self._base_url = self._base1
+        status = self._get_key()
+        if self._key:
+            self.save_progress('Got API Key from node1')
+            return phantom.APP_SUCCESS
+        self.save_progress('Failed...')
+        self.save_progress(('Trying to get API Key from node2, {} seconds timeout').format(self._timeout))
+        self._base_url = self._base2
+        status = self._get_key()
+        if self._key:
+            self.save_progress('Got API Key from node2')
+            return phantom.APP_SUCCESS
+        self.save_progress('Failed...')
+        return phantom.APP_ERROR
+
+    def _get_ha_status(self):
+        if not self._key:
+            msg = 'Error: API Key not set'
+            self.save_progress(msg)
+            return phantom.APP_ERROR
+        data = {'key': self._key, 
+           'type': 'op', 
+           'cmd': '<show><high-availability><state></state></high-availability></show>'}
+        if self._node1:
+            self.save_progress(('Trying to get status from node: {}').format(self._node1))
+            self._base_url = self._base1
+            status = self._make_rest_call(data, self._action_result)
+            if not self._response:
+                self.save_progress('Failed...')
+            else:
+                response = self._response.get('response', {})
+                results = response.get('result', {})
+                group = results.get('group', {})
+                if response.get('@status') == 'success' and group.get('local-info'):
+                    self._status1 = group
+                    self.save_progress('Got status from node1...')
+                else:
+                    self.save_progress('Failed...')
+        if self._node2:
+            self.save_progress(('Trying to get status from node: {}').format(self._node2))
+            self._base_url = self._base2
+            status = self._make_rest_call(data, self._action_result)
+            if not self._response:
+                self.save_progress('Failed...')
+            else:
+                response = self._response.get('response', {})
+                results = response.get('result', {})
+                group = results.get('group', {})
+                if response.get('@status') == 'success' and group.get('local-info'):
+                    self._status2 = group
+                    self.save_progress('Got status from node2...')
+                else:
+                    self.save_progress('Failed...')
+
+    def _get_active_node(self):
+        if not self._node2:
+            self._active = self._node1
+            self.save_progress('Single node configuration')
+            return phantom.APP_SUCCESS
+        self.save_progress('HA two node configuration')
+        self._get_ha_status()
+        if self._status1:
+            state = self._status1.get('local-info', {})
+            state = state.get('state')
+            if state == 'active':
+                self._active = self._node1
+                self.save_progress('Node1 is active')
+                return phantom.APP_SUCCESS
+        self.save_progress('Node1 is not active')
+        if self._status2:
+            state = self._status2.get('local-info', {})
+            state = state.get('state')
+            if state == 'active':
+                self._active = self._node2
+                self.save_progress('Node2 is active')
+                return phantom.APP_SUCCESS
+        self.save_progress('Node2 is not active')
+        return phantom.APP_ERROR
+
     def initialize(self):
 
         config = self.get_config()
 
-        # Base URL
-        self._base_url = 'https://' + config[phantom.APP_JSON_DEVICE] + '/api/'
-
-        return phantom.APP_SUCCESS
+        self._noautoadd = False
+        self._response = None
+        self._action_result = ActionResult()
+        self._key = config.get('apikey')
+        self._timeout = config.get('get_ha_status_timeout', 20)
+        self._node1 = config['device'].strip('/')
+        self._base1 = 'https://' + self._node1 + '/api/'
+        self._status1 = None
+        self._node2 = config.get('second_device', '').strip('/')
+        self._base2 = 'https://' + self._node2 + '/api/'
+        self._status2 = None
+        status = self._just_get_key()
+        if phantom.is_fail(status):
+            action_result = self.add_action_result(self._action_result)
+            msg = 'Error: cannot get API Key'
+            self.save_progress(msg)
+            return action_result.set_status(phantom.APP_ERROR, msg)
+        else:
+            status = self._get_active_node()
+            if phantom.is_fail(status):
+                action_result = self.add_action_result(self._action_result)
+                msg = 'Error: failed to find active node'
+                self.save_progress(msg)
+                return action_result.set_status(phantom.APP_ERROR, msg)
+            self.save_progress(('Utilizing node: {}').format(self._active))
+            self._base_url = 'https://' + self._active + '/api/'
+            self._timeout = None
+            return phantom.APP_SUCCESS
 
     def _parse_response_msg(self, response, action_result):
 
@@ -135,7 +247,10 @@ class PanConnector(BaseConnector):
         data = {'type': 'keygen', 'user': username, 'password': password}
 
         try:
-            response = requests.post(self._base_url, data=data, verify=config[phantom.APP_JSON_VERIFY])
+            if self._timeout:
+                response = requests.post(self._base_url, data=data, verify=config[phantom.APP_JSON_VERIFY], timeout=self._timeout)
+            else:
+                response = requests.post(self._base_url, data=data, verify=config[phantom.APP_JSON_VERIFY])
         except Exception as e:
             self.debug_print(PAN_ERR_DEVICE_CONNECTIVITY, e)
             return self.set_status(phantom.APP_ERROR, PAN_ERR_DEVICE_CONNECTIVITY, e)
@@ -215,7 +330,10 @@ class PanConnector(BaseConnector):
         config = self.get_config()
 
         try:
-            response = requests.post(self._base_url, data=data, verify=config[phantom.APP_JSON_VERIFY])
+            if self._timeout:
+                response = requests.post(self._base_url, data=data, verify=config[phantom.APP_JSON_VERIFY], timeout=self._timeout)
+            else:
+                response = requests.post(self._base_url, data=data, verify=config[phantom.APP_JSON_VERIFY])
         except Exception as e:
             self.debug_print(PAN_ERR_DEVICE_CONNECTIVITY, e)
             return action_result.set_status(phantom.APP_ERROR, PAN_ERR_DEVICE_CONNECTIVITY, e)
@@ -836,6 +954,129 @@ class PanConnector(BaseConnector):
 
         return action_result.set_status(phantom.APP_SUCCESS)
 
+    def _handle_get_user_info(self, param, pass_action_result=None):
+        self._noautoadd = True
+        self.save_progress(('In action handler for: {0}').format(self.get_action_identifier()))
+        if pass_action_result:
+            action_result = pass_action_result
+        else:
+            action_result = self.add_action_result(ActionResult(dict(param)))
+        status = self._get_key()
+        if phantom.is_fail(status):
+            msg = 'Error: failed to get api key'
+            self.save_progress(msg)
+            return action_result.set_status(phantom.APP_ERROR, msg)
+        user = param['user_search_string']
+        exact_match = param.get('exact_match', '').lower() == 'true'
+        data = {'key': self._key, 
+           'type': 'op', 
+           'cmd': ('<show><global-protect-gateway><current-user><user>{}</user></current-user></global-protect-gateway></show>').format(user)}
+        status = self._make_rest_call(data, action_result)
+        if phantom.is_fail(status):
+            return action_result.get_status()
+        results = self._response.get('response', {})
+        results = results.get('result', {})
+        results = results.get('entry')
+        if not results:
+            results = []
+        if isinstance(results, dict):
+            results = [
+             results]
+        if exact_match:
+            results = filter(lambda x: x.get('username') == user, results)
+        if pass_action_result:
+            return results
+        action_result.update_summary({'entries': len(results)})
+        for x in results:
+            action_result.add_data(x)
+
+        return action_result.set_status(phantom.APP_SUCCESS)
+
+    def _handle_logout_user(self, param):
+        self._noautoadd = True
+        self.save_progress(('In action handler for: {0}').format(self.get_action_identifier()))
+        action_result = self.add_action_result(ActionResult(dict(param)))
+        status = self._get_key()
+        if phantom.is_fail(status):
+            msg = 'Error: failed to get api key'
+            self.save_progress(msg)
+            return action_result.set_status(phantom.APP_ERROR, msg)
+        user = param['user']
+        domain = param.get('domain')
+        computer_name = param.get('computer_name')
+        gateways = param.get('gateways', self.get_config().get('gateways_for_logout_gpfw_user', ''))
+        gateways = [ y for x in gateways.split() for y in x.split(',') if y ]
+        if not domain or computer_name:
+            results = self._handle_get_userinfo({'user_search_string': user, 'exact_match': 'true'}, pass_action_result=action_result)
+            if not isinstance(results, list) or len(results) == 0:
+                msg = 'Error: user not found'
+                self.save_progress(msg)
+                return action_result.set_status(phantom.APP_ERROR, msg)
+            if domain:
+                results = filter(lambda x: x.get('domain') == domain, results)
+            if computer_name:
+                results = filter(lambda x: x.get('computer') == computer_name, results)
+            if len(results) == 0:
+                msg = 'Error: matching user/domain/computer not found'
+                self.save_progress(msg)
+                return action_result.set_status(phantom.APP_ERROR, msg)
+        else:
+            results = [
+             {'username': user, 
+                'domain': domain, 
+                'computer': computer_name}]
+        status = 'No valid parameters'
+        rest_responses = []
+        for x in results:
+            for g in gateways:
+                command = ('<request><global-protect-gateway><client-logout><gateway>{3}</gateway><domain>{1}</domain><user>{0}</user><reason>force-logout</reason><computer>{2}</computer></client-logout></global-protect-gateway></request>').format(x['username'], x['domain'], x['computer'], g)
+                data = {'key': self._key, 
+                   'type': 'op', 
+                   'cmd': command}
+                status = self._make_rest_call(data, action_result)
+                if phantom.is_fail(status):
+                    return action_result.get_status()
+                response = self._response.get('response', {})
+                response = response.get('result', {})
+                response = response.get('response', {})
+                status = response.get('@status')
+                if status == 'success':
+                    rest_responses = [
+                     response]
+                    break
+                rest_responses += [response]
+
+        action_result.update_summary({'{logoff': status})
+        for x in rest_responses:
+            action_result.add_data(x)
+
+        if status == 'success':
+            return action_result.set_status(phantom.APP_SUCCESS)
+        msg = 'Error: failed to logoff user'
+        self.save_progress(msg)
+        return action_result.set_status(phantom.APP_ERROR, msg)
+
+    def _handle_show_ha_status(self, param):
+        self.save_progress(('In action handler for: {0}').format(self.get_action_identifier()))
+        action_result = self.add_action_result(ActionResult(dict(param)))
+        if self._status1:
+            action_result.add_data(self._status1)
+        if self._status2:
+            action_result.add_data(self._status2)
+        if self._status1:
+            state = self._status1.get('local-info', {})
+            state = state.get('state')
+            if state == 'active':
+                action_result.update_summary({'active': self._node1})
+        elif self._status2:
+            state = self._status2.get('local-info', {})
+            state = state.get('state')
+            if state == 'active':
+                action_result.update_summary({'active': self._node2})
+        else:
+            action_result.update_summary({'active': 'No active nodes'})
+        return action_result.set_status(phantom.APP_SUCCESS)
+
     def _validate_version(self, action_result):
 
         # make a rest call to get the info
@@ -910,6 +1151,13 @@ class PanConnector(BaseConnector):
             result = self._unblock_ip(param)
         elif action == self.ACTION_ID_LIST_APPS:
             result = self._list_apps(param)
+        elif action == self.ACTION_ID_GET_USER_INFO:
+            result = self._handle_get_user_info(param)
+        elif action == self.ACTION_ID_LOGOUT_GPFW_USER:
+            result = self._handle_logout_user(param)
+        elif action == self.ACTION_ID_SHOW_HA_STATUS:
+            result = self._handle_show_ha_status(param)
+
 
         return result
 
@@ -926,12 +1174,14 @@ if __name__ == '__main__':
     argparser.add_argument('input_test_json', help='Input Test JSON file')
     argparser.add_argument('-u', '--username', help='username', required=False)
     argparser.add_argument('-p', '--password', help='password', required=False)
+    argparser.add_argument('-v', '--verify', action='store_true', help='verify', required=False, default=False)
 
     args = argparser.parse_args()
     session_id = None
 
     username = args.username
     password = args.password
+    verify = args.verify
 
     if username is not None and password is None:
 
@@ -943,7 +1193,7 @@ if __name__ == '__main__':
         try:
             print("Accessing the Login page")
             login_url = BaseConnector._get_phantom_base_url() + 'login'
-            r = requests.get(login_url, verify=False)
+            r = requests.get(login_url, verify=verify, timeout=60)
             csrftoken = r.cookies['csrftoken']
 
             data = dict()
@@ -956,7 +1206,7 @@ if __name__ == '__main__':
             headers['Referer'] = login_url
 
             print("Logging into Platform to get the session id")
-            r2 = requests.post(login_url, verify=False, data=data, headers=headers)
+            r2 = requests.post(login_url, verify=verify, data=data, headers=headers, timeout=60)
             session_id = r2.cookies['sessionid']
         except Exception as e:
             print("Unable to get session id from the platfrom. Error: " + str(e))

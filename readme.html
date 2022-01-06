@@ -1,5 +1,5 @@
 <!-- File: readme.html
-  Copyright (c) 2014-2021 Splunk Inc.
+  Copyright (c) 2014-2022 Splunk Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -13,3 +13,24 @@ either express or implied. See the License for the specific language governing p
 and limitations under the License.
 -->
 <p>This app creates, modifies, and deletes information that it creates on the PAN Firewall.  As a result, please do not edit addresses in PAN created by Phantom.  Doing so may result in unexpected behavior when performing actions on Phantom-created addresses.</p>
+<p>
+  The app uses HTTP/ HTTPS protocol for communicating with the Tala server. Below are the default ports used by Splunk SOAR.
+  <table>
+      <tr class=plain>
+          <th>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Service Name</th>
+          <th>Transport Protocol</th>
+          <th>Port</th>
+      </tr>
+      <tr>
+          <td>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;http</td>
+          <td>tcp</td>
+          <td>80</td>
+      </tr>
+      <tr>
+          <td>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;https</td>
+          <td>tcp</td>
+          <td>443</td>
+      </tr>
+  </table>
+</p>
+

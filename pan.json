@@ -5,21 +5,20 @@
     "publisher": "Splunk",
     "type": "firewall",
     "main_module": "pan_connector.py",
-    "app_version": "2.0.16",
+    "app_version": "2.1.0",
     "utctime_updated": "2021-12-01T22:21:39.000000Z",
     "package_name": "phantom_pan",
     "product_vendor": "Palo Alto Networks",
     "product_name": "Firewall",
     "product_version_regex": ".*",
-    "min_phantom_version": "4.9.39220",
+    "min_phantom_version": "5.0.0",
     "latest_tested_versions": [
         "On prem, Software Version 8.0.8"
-    ],
-    "python_version": "3",
+    ], "python_version": "3",
     "fips_compliant": true,
     "logo": "logo_paloaltonetworks.svg",
     "logo_dark": "logo_paloaltonetworks_dark.svg",
-    "license": "Copyright (c) 2014-2021 Splunk Inc.",
+    "license": "Copyright (c) 2014-2022 Splunk Inc.",
     "configuration": {
         "device": {
             "data_type": "string",
@@ -27,12 +26,24 @@
             "description": "Device IP/Hostname",
             "required": true
         },
+        "second_device": {
+            "data_type": "string",
+            "order": 1,
+            "verbose": "Second HA Device IP/Hostname. This device is the second half of a active/passive pair. If this device is provided, a query is made to determine the active device and the action is submitted to the active device.",
+            "description": "Second HA Device IP/Hostname",
+            "required": false
+        },
+        "get_ha_status_timeout": {
+            "data_type": "numeric",
+            "description": "Timeout in seconds when determining HA status of nodes",
+            "order": 4,
+            "default": 20,
+            "required": false
+        },
         "verify_server_cert": {
             "data_type": "boolean",
             "description": "Verify server certificate",
-            "required": true,
-            "order": 1,
-            "default": true
+            "order": 5
         },
         "username": {
             "data_type": "string",
@@ -45,6 +56,22 @@
             "order": 3,
             "description": "Password",
             "required": true
+        },
+        "apikey": {
+            "data_type": "password",
+            "order": 6,
+            "description": "API key. This is used in place of user/password",
+            "required": false
+        },
+        "ph2":{
+            "data_type": "ph",
+            "order": 7
+        },
+        "gateways_for_logout_gpfw_user":{
+            "data_type": "string",
+            "description": "Default list of gateways for \"logoff user\" action. Either comma or space separated",
+            "required": false,
+            "order": 8
         }
     },
     "actions": [
@@ -108,15 +135,24 @@
                     "column_order": 0,
                     "contains": [
                         "url"
+                    ],
+                    "example_values": [
+                        "www.example.com"
                     ]
                 },
                 {
                     "data_path": "action_result.parameter.vsys",
-                    "data_type": "string"
+                    "data_type": "string",
+                    "example_values": [
+                        "vsys1"
+                    ]
                 },
                 {
                     "data_path": "action_result.parameter.sec_policy",
-                    "data_type": "string"
+                    "data_type": "string",
+                    "example_values": [
+                        "custom"
+                    ]
                 },
                 {
                     "data_path": "action_result.status",
@@ -185,11 +221,17 @@
                     "column_order": 0,
                     "contains": [
                         "url"
+                    ],
+                    "example_values": [
+                        "www.example.com"
                     ]
                 },
                 {
                     "data_path": "action_result.parameter.vsys",
-                    "data_type": "string"
+                    "data_type": "string",
+                    "example_values": [
+                        "vsys1"
+                    ]
                 },
                 {
                     "data_path": "action_result.status",
@@ -253,7 +295,10 @@
             "output": [
                 {
                     "data_path": "action_result.parameter.vsys",
-                    "data_type": "string"
+                    "data_type": "string",
+                    "example_values": [
+                        "vsys1"
+                    ]
                 },
                 {
                     "data_path": "action_result.parameter.application",
@@ -262,6 +307,9 @@
                     "column_order": 0,
                     "contains": [
                         "network application"
+                    ],
+                    "example_values": [
+                        "100bao"
                     ]
                 },
                 {
@@ -326,7 +374,10 @@
             "output": [
                 {
                     "data_path": "action_result.parameter.vsys",
-                    "data_type": "string"
+                    "data_type": "string",
+                    "example_values": [
+                        "vsys1"
+                    ]
                 },
                 {
                     "data_path": "action_result.parameter.application",
@@ -335,6 +386,9 @@
                     "column_order": 0,
                     "contains": [
                         "network application"
+                    ],
+                    "example_values": [
+                        "100bao"
                     ]
                 },
                 {
@@ -409,11 +463,17 @@
                     "column_order": 0,
                     "contains": [
                         "ip"
+                    ],
+                    "example_values": [
+                        "10.10.10.10"
                     ]
                 },
                 {
                     "data_path": "action_result.parameter.vsys",
-                    "data_type": "string"
+                    "data_type": "string",
+                    "example_values": [
+                        "vsys1"
+                    ]
                 },
                 {
                     "data_path": "action_result.parameter.is_source_address",
@@ -491,6 +551,9 @@
                     "column_order": 0,
                     "contains": [
                         "ip"
+                    ],
+                    "example_values": [
+                        "10.10.10.10"
                     ]
                 },
                 {
@@ -499,7 +562,10 @@
                 },
                 {
                     "data_path": "action_result.parameter.vsys",
-                    "data_type": "string"
+                    "data_type": "string",
+                    "example_values": [
+                        "vsys1"
+                    ]
                 },
                 {
                     "data_path": "action_result.status",
@@ -576,7 +642,7 @@
                 {
                     "data_path": "action_result.data.*.used-by-malware",
                     "data_type": "string",
-                    "column_name": "Used by Malware",
+                    "column_name": "Used By Malware",
                     "column_order": 4
                 },
                 {
@@ -924,6 +990,306 @@
                     "data_type": "numeric"
                 }
             ],
+            "versions": "EQ(*)"
+        },
+        {
+            "action": "get user info",
+            "description": "Get specific information about a user",
+            "type": "investigate",
+            "identifier": "get_user_info",
+            "read_only": true,
+            "parameters": {
+                "user_search_string": {
+                    "description": "Return entries with the username field beginning with this value",
+                    "data_type": "string",
+                    "order": 0,
+                    "contains": [
+                        "user name"
+                    ],
+                    "primary": true,
+                    "required": true
+                },
+                "exact_match": {
+                    "description": "Return entries exactly matching the user_search_string",
+                    "data_type": "string",
+                    "order": 1,
+                    "default": "true",
+                    "value_list":[
+                        "true",
+                        "false"
+                    ],
+                    "required": false
+                }
+            },
+            "render": {
+                "type": "table",
+                "width": 12,
+                "height": 5,
+                "title": "Get userinfo"
+            },
+            "output": [
+                {
+                    "data_path": "action_result.status",
+                    "data_type": "string"
+                },
+                {
+                    "data_path": "action_result.summary",
+                    "data_type": "string"
+                },
+                {
+                    "data_path": "action_result.message",
+                    "data_type": "string"
+                },
+                {
+                    "data_path": "action_result.parameter.user_search_string",
+                    "data_type": "string",
+                    "contains": [
+                        "user name"
+                    ],
+                    "example_values": [
+                        "admin"
+                    ]
+                },
+                {
+                    "data_path": "action_result.parameter.exact_match",
+                    "data_type": "string",
+                    "example_values": [
+                        "true",
+                        "false"
+                    ]
+                },
+                {
+                    "data_path": "action_result.data.*.username",
+                    "data_type": "string",
+                    "contains": [
+                        "user name"
+                    ],
+                    "column_name": "User",
+                    "column_order": 0
+                },
+                {
+                    "data_path": "action_result.data.*.domain",
+                    "data_type": "string",
+                    "contains": [
+                        "domain"
+                    ],
+                    "column_name": "Domain",
+                    "column_order": 1
+                },
+                {
+                    "data_path": "action_result.data.*.computer",
+                    "data_type": "string",
+                    "contains": [
+                        "host name"
+                    ],
+                    "column_name": "Computer",
+                    "column_order": 2
+                }
+            ],
+            "versions": "EQ(*)"
+        },
+        {
+            "action": "logout gpfw user",
+            "description": "Logout user from vpn",
+            "type": "contain",
+            "identifier": "logout_gpfw_user",
+            "read_only": false,
+            "parameters": {
+                "user": {
+                    "description": "Logout this user from the vpn",
+                    "data_type": "string",
+                    "order": 0,
+                    "contains": [
+                        "user name"
+                    ],
+                    "primary": true,
+                    "required": true
+                },
+                "domain": {
+                    "description": "User's Active Directory domain. If empty, get data from firewall",
+                    "data_type": "string",
+                    "order": 1,
+                    "contains": [
+                        "domain"
+                    ],
+                    "primary": true,
+                    "required": false
+                },
+                "computer_name": {
+                    "description": "User's computer name. If empty, get data from firewall",
+                    "data_type": "string",
+                    "order": 2,
+                    "contains": [
+                        "host name"
+                    ],
+                    "primary": true,
+                    "required": false
+                },
+                "gateways": {
+                    "description": "List of gateways. Either comma or space separated. If empty, use default list from asset configuration",
+                    "data_type": "string",
+                    "order": 3,
+                    "required": false
+                }
+            },
+            "render": {
+                "type": "table",
+                "width": 12,
+                "height": 5,
+                "title": "Logout gpfw users"
+            },
+            "output": [
+                {
+                    "data_path": "action_result.status",
+                    "data_type": "string"
+                },
+                {
+                    "data_path": "action_result.summary",
+                    "data_type": "string"
+                },
+                {
+                    "data_path": "action_result.message",
+                    "data_type": "string"
+                },
+                {
+                    "data_path": "action_result.parameter.user",
+                    "data_type": "string",
+                    "contains": [
+                        "user name"
+                    ]
+                },
+                {
+                    "data_path": "action_result.parameter.domain",
+                    "data_type": "string",
+                    "contains": [
+                        "domain"
+                    ]
+                },
+                {
+                    "data_path": "action_result.parameter.computer_name",
+                    "data_type": "string",
+                    "contains": [
+                        "host name"
+                    ]
+                },
+                {
+                    "data_path": "action_result.parameter.gateways",
+                    "data_type": "string"
+                },
+                {
+                    "data_path": "action_result.data.*.@status",
+                    "data_type": "string",
+                    "column_name": "Status",
+                    "column_order": 0
+                },
+                {
+                    "data_path": "action_result.data.*.gateway",
+                    "data_type": "string",
+                    "column_name": "Gateway",
+                    "column_order": 1
+                },
+                {
+                    "data_path": "action_result.data.*.user",
+                    "data_type": "string",
+                    "contains": [
+                        "user name"
+                    ],
+                    "column_name": "User",
+                    "column_order": 2
+                },
+                {
+                    "data_path": "action_result.data.*.domain",
+                    "data_type": "string",
+                    "contains": [
+                        "domain"
+                    ],
+                    "column_name": "Domain",
+                    "column_order": 3
+                },
+                {
+                    "data_path": "action_result.data.*.computer",
+                    "data_type": "string",
+                    "contains": [
+                        "host name"
+                    ],
+                    "column_name": "computer_name",
+                    "column_order": 4
+                },
+                {
+                    "data_path": "action_result.data.*.error",
+                    "data_type": "string",
+                    "column_name": "Error",
+                    "column_order": 5
+                }
+            ],
+            "versions": "EQ(*)"
+        },
+        {
+            "action": "show ha status",
+            "description": "Show HA status if second node is configured",
+            "type": "investigate",
+            "identifier": "show_ha_status",
+            "read_only": true,
+            "parameters": {
+            },
+            "output": [
+                {
+                    "data_path": "action_result.status",
+                    "data_type": "string"
+                },
+                {
+                    "data_path": "action_result.summary",
+                    "data_type": "string"
+                },
+                {
+                    "data_path": "action_result.message",
+                    "data_type": "string"
+                },
+                {
+                    "data_path": "action_result.data.*.local-info.state",
+                    "data_type": "string",
+                    "column_name": "Local State",
+                    "column_order": 0
+                },
+                {
+                    "data_path": "action_result.data.*.local-info.mgmt-ip",
+                    "data_type": "string",
+                    "column_name": "Local IP Address",
+                    "column_order": 1
+                },
+                {
+                    "data_path": "action_result.data.*.peer-info.state",
+                    "data_type": "string",
+                    "column_name": "Peer State",
+                    "column_order": 2
+                },
+                {
+                    "data_path": "action_result.data.*.peer-info.mgmt-ip",
+                    "data_type": "string",
+                    "column_name": "Peer IP Address",
+                    "column_order": 3
+                },
+                {
+                    "data_path": "summary.total_objects", 
+                    "example_values": [
+                        1
+                    ],
+                    "data_type": "numeric"
+                }, 
+                {
+                    "data_path": "summary.total_objects_successful", 
+                    "example_values": [
+                        1
+                    ],
+                    "data_type": "numeric"
+                }
+            ],
+            "render": {
+                "type": "table",
+                "width": 12,
+                "height": 5,
+                "title": "HA Status"
+            },
             "versions": "EQ(*)"
         }
     ],
