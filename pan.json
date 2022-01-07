@@ -63,15 +63,11 @@
             "description": "API key. This is used in place of user/password",
             "required": false
         },
-        "ph2":{
-            "data_type": "ph",
-            "order": 7
-        },
         "gateways_for_logout_gpfw_user":{
             "data_type": "string",
             "description": "Default list of gateways for \"logoff user\" action. Either comma or space separated",
             "required": false,
-            "order": 8
+            "order": 7
         }
     },
     "actions": [
@@ -1037,6 +1033,14 @@
                     "data_type": "string"
                 },
                 {
+                    "data_path": "summary.total_objects_successful",
+                    "data_type": "string"
+                },
+                {
+                    "data_path": "summary.total_objects",
+                    "data_type": "string"
+                },
+                {
                     "data_path": "action_result.message",
                     "data_type": "string"
                 },
@@ -1145,6 +1149,14 @@
                 },
                 {
                     "data_path": "action_result.summary",
+                    "data_type": "string"
+                },
+                {
+                    "data_path": "summary.total_objects_successful",
+                    "data_type": "string"
+                },
+                {
+                    "data_path": "summary.total_objects",
                     "data_type": "string"
                 },
                 {
@@ -1270,14 +1282,14 @@
                     "column_order": 3
                 },
                 {
-                    "data_path": "summary.total_objects", 
+                    "data_path": "summary.total_objects",
                     "example_values": [
                         1
                     ],
                     "data_type": "numeric"
-                }, 
+                },
                 {
-                    "data_path": "summary.total_objects_successful", 
+                    "data_path": "summary.total_objects_successful",
                     "example_values": [
                         1
                     ],

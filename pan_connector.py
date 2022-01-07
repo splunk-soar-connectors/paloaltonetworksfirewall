@@ -15,19 +15,17 @@
 #
 #
 # Phantom imports
-from os import stat
-import phantom.app as phantom
-from phantom.base_connector import BaseConnector
-from phantom.action_result import ActionResult
-
-# THIS Connector imports
-from pan_consts import *
-
-import requests
-import xmltodict
+import json
 import re
 import time
-import json
+
+import phantom.app as phantom
+import requests
+import xmltodict
+from phantom.action_result import ActionResult
+from phantom.base_connector import BaseConnector
+
+from pan_consts import *
 
 
 class PanConnector(BaseConnector):
@@ -61,6 +59,11 @@ class PanConnector(BaseConnector):
         self.save_progress('Trying to get API Key from node1, {} seconds timeout'.format(self._timeout))
         self._base_url = self._base1
         status = self._get_key()
+        if phantom.is_fail(status):
+            action_result = self.add_action_result(self._action_result)
+            msg = 'Error: cannot get API Key for node1'
+            self.save_progress(msg)
+            return action_result.set_status(phantom.APP_ERROR, msg)
         if self._key:
             self.save_progress('Got API Key from node1')
             return phantom.APP_SUCCESS
@@ -68,6 +71,11 @@ class PanConnector(BaseConnector):
         self.save_progress(('Trying to get API Key from node2, {} seconds timeout').format(self._timeout))
         self._base_url = self._base2
         status = self._get_key()
+        if phantom.is_fail(status):
+            action_result = self.add_action_result(self._action_result)
+            msg = 'Error: cannot get API Key for node2'
+            self.save_progress(msg)
+            return action_result.set_status(phantom.APP_ERROR, msg)
         if self._key:
             self.save_progress('Got API Key from node2')
             return phantom.APP_SUCCESS
@@ -79,13 +87,17 @@ class PanConnector(BaseConnector):
             msg = 'Error: API Key not set'
             self.save_progress(msg)
             return phantom.APP_ERROR
-        data = {'key': self._key, 
-           'type': 'op', 
-           'cmd': '<show><high-availability><state></state></high-availability></show>'}
+        data = {'key': self._key,
+                'type': 'op',
+                'cmd': '<show><high-availability><state></state></high-availability></show>'
+                }
         if self._node1:
             self.save_progress(('Trying to get status from node: {}').format(self._node1))
             self._base_url = self._base1
             status = self._make_rest_call(data, self._action_result)
+            if phantom.is_fail(status):
+                msg = 'Can not high-availability state for node1'
+                self.save_progress(msg)
             if not self._response:
                 self.save_progress('Failed...')
             else:
@@ -101,6 +113,9 @@ class PanConnector(BaseConnector):
             self.save_progress(('Trying to get status from node: {}').format(self._node2))
             self._base_url = self._base2
             status = self._make_rest_call(data, self._action_result)
+            if phantom.is_fail(status):
+                msg = 'Can not high-availability state for node2'
+                self.save_progress(msg)
             if not self._response:
                 self.save_progress('Failed...')
             else:
@@ -968,12 +983,17 @@ class PanConnector(BaseConnector):
             return action_result.set_status(phantom.APP_ERROR, msg)
         user = param['user_search_string']
         exact_match = param.get('exact_match', '').lower() == 'true'
-        data = {'key': self._key, 
-           'type': 'op', 
-           'cmd': ('<show><global-protect-gateway><current-user><user>{}</user></current-user></global-protect-gateway></show>').format(user)}
+        data = {'key': self._key,
+                'type': 'op',
+                'cmd': ('<show><global-protect-gateway><current-user><user>{}\
+                        </user></current-user></global-protect-gateway></show>').format(user)
+                }
         status = self._make_rest_call(data, action_result)
         if phantom.is_fail(status):
             return action_result.get_status()
+        if not self._response:
+            msg = "No response for user: {}".format(user)
+            return action_result.set_status(phantom.APP_SUCCESS, msg)
         results = self._response.get('response', {})
         results = results.get('result', {})
         results = results.get('entry')
@@ -1007,7 +1027,9 @@ class PanConnector(BaseConnector):
         gateways = param.get('gateways', self.get_config().get('gateways_for_logout_gpfw_user', ''))
         gateways = [ y for x in gateways.split() for y in x.split(',') if y ]
         if not domain or computer_name:
-            results = self._handle_get_userinfo({'user_search_string': user, 'exact_match': 'true'}, pass_action_result=action_result)
+            results = self._handle_get_user_info(
+                {'user_search_string': user, 'exact_match': 'true'},
+                pass_action_result=action_result)
             if not isinstance(results, list) or len(results) == 0:
                 msg = 'Error: user not found'
                 self.save_progress(msg)
@@ -1022,17 +1044,23 @@ class PanConnector(BaseConnector):
                 return action_result.set_status(phantom.APP_ERROR, msg)
         else:
             results = [
-             {'username': user, 
-                'domain': domain, 
-                'computer': computer_name}]
+                {
+                    'username': user,
+                    'domain': domain,
+                    'computer': computer_name
+                }
+            ]
         status = 'No valid parameters'
         rest_responses = []
         for x in results:
             for g in gateways:
-                command = ('<request><global-protect-gateway><client-logout><gateway>{3}</gateway><domain>{1}</domain><user>{0}</user><reason>force-logout</reason><computer>{2}</computer></client-logout></global-protect-gateway></request>').format(x['username'], x['domain'], x['computer'], g)
-                data = {'key': self._key, 
-                   'type': 'op', 
-                   'cmd': command}
+                command = ('<request><global-protect-gateway><client-logout><gateway>{3}\
+                            </gateway><domain>{1}</domain><user>{0}</user><reason>force-logout</reason><computer>{2}\
+                            </computer></client-logout></global-protect-gateway></request>').format(
+                    x['username'], x['domain'], x['computer'], g)
+                data = {'key': self._key,
+                        'type': 'op',
+                        'cmd': command}
                 status = self._make_rest_call(data, action_result)
                 if phantom.is_fail(status):
                     return action_result.get_status()
@@ -1158,14 +1186,14 @@ class PanConnector(BaseConnector):
         elif action == self.ACTION_ID_SHOW_HA_STATUS:
             result = self._handle_show_ha_status(param)
 
-
         return result
 
 
 if __name__ == '__main__':
 
-    import pudb
     import argparse
+
+    import pudb
 
     pudb.set_trace()
 
