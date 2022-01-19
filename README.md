@@ -2,7 +2,7 @@
 # Palo Alto Networks Firewall
 
 Publisher: Splunk  
-Connector Version: 2\.0\.17  
+Connector Version: 2\.0\.19  
 Product Vendor: Palo Alto Networks  
 Product Name: Firewall  
 Product Version Supported (regex): "\.\*"  
@@ -10,7 +10,7 @@ Minimum Product Version: 4\.9\.39220
 
 This app integrates with the Palo Alto Networks Firewall to support containment and investigative actions
 
-[comment]: # " File: readme.md"
+[comment]: # " File: README.md"
 [comment]: # "  Copyright (c) 2014-2022 Splunk Inc."
 [comment]: # ""
 [comment]: # "Licensed under the Apache License, Version 2.0 (the 'License');"
