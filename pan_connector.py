@@ -61,25 +61,25 @@ class PanConnector(BaseConnector):
         status = self._get_key()
         if phantom.is_fail(status):
             action_result = self.add_action_result(self._action_result)
-            msg = 'Error: cannot get API Key for node1'
+            msg = 'Error: can not get API Key for node1'
             self.save_progress(msg)
             return action_result.set_status(phantom.APP_ERROR, msg)
         if self._key:
             self.save_progress('Got API Key from node1')
             return phantom.APP_SUCCESS
-        self.save_progress('Failed...')
+        self.save_progress('Failed get API Key for node1')
         self.save_progress(('Trying to get API Key from node2, {} seconds timeout').format(self._timeout))
         self._base_url = self._base2
         status = self._get_key()
         if phantom.is_fail(status):
             action_result = self.add_action_result(self._action_result)
-            msg = 'Error: cannot get API Key for node2'
+            msg = 'Error: can not get API Key for node2'
             self.save_progress(msg)
             return action_result.set_status(phantom.APP_ERROR, msg)
         if self._key:
             self.save_progress('Got API Key from node2')
             return phantom.APP_SUCCESS
-        self.save_progress('Failed...')
+        self.save_progress('Failed to get API Key for node2')
         return phantom.APP_ERROR
 
     def _get_ha_status(self):
@@ -99,7 +99,7 @@ class PanConnector(BaseConnector):
                 msg = 'Can not high-availability state for node1'
                 self.save_progress(msg)
             if not self._response:
-                self.save_progress('Failed...')
+                self.save_progress('Failed to get response for node1')
             else:
                 response = self._response.get('response', {})
                 results = response.get('result', {})
@@ -108,7 +108,7 @@ class PanConnector(BaseConnector):
                     self._status1 = group
                     self.save_progress('Got status from node1...')
                 else:
-                    self.save_progress('Failed...')
+                    self.save_progress('Failed get status and local-info for node1')
         if self._node2:
             self.save_progress(('Trying to get status from node: {}').format(self._node2))
             self._base_url = self._base2
@@ -117,7 +117,7 @@ class PanConnector(BaseConnector):
                 msg = 'Can not high-availability state for node2'
                 self.save_progress(msg)
             if not self._response:
-                self.save_progress('Failed...')
+                self.save_progress('Failed to get response for node2')
             else:
                 response = self._response.get('response', {})
                 results = response.get('result', {})
@@ -126,7 +126,7 @@ class PanConnector(BaseConnector):
                     self._status2 = group
                     self.save_progress('Got status from node2...')
                 else:
-                    self.save_progress('Failed...')
+                    self.save_progress('Failed get status and local-info for node2')
 
     def _get_active_node(self):
         if not self._node2:
@@ -365,6 +365,7 @@ class PanConnector(BaseConnector):
             self.save_progress(PAN_ERR_UNABLE_TO_PARSE_REPLY)
             return action_result.set_status(phantom.APP_ERROR, PAN_ERR_UNABLE_TO_PARSE_REPLY, e)
 
+        self._response = response_dict
         status = self._parse_response(response_dict, action_result)
 
         if phantom.is_fail(status):
@@ -986,7 +987,7 @@ class PanConnector(BaseConnector):
         data = {'key': self._key,
                 'type': 'op',
                 'cmd': ('<show><global-protect-gateway><current-user><user>{}\
-                        </user></current-user></global-protect-gateway></show>').format(user)
+                        </user></current-user></global-protect-gateway></show>').format(user.strip())
                 }
         status = self._make_rest_call(data, action_result)
         if phantom.is_fail(status):
@@ -1074,7 +1075,7 @@ class PanConnector(BaseConnector):
                     break
                 rest_responses += [response]
 
-        action_result.update_summary({'{logoff': status})
+        action_result.update_summary({'logoff': status})
         for x in rest_responses:
             action_result.add_data(x)
 
@@ -1087,20 +1088,23 @@ class PanConnector(BaseConnector):
     def _handle_show_ha_status(self, param):
         self.save_progress(('In action handler for: {0}').format(self.get_action_identifier()))
         action_result = self.add_action_result(ActionResult(dict(param)))
-        if self._status1:
-            action_result.add_data(self._status1)
-        if self._status2:
-            action_result.add_data(self._status2)
+        self._get_ha_status()
         if self._status1:
             state = self._status1.get('local-info', {})
             state = state.get('state')
             if state == 'active':
+                action_result.add_data(self._status1)
                 action_result.update_summary({'active': self._node1})
+            else:
+                action_result.update_summary({'active': 'No active nodes'})
         elif self._status2:
             state = self._status2.get('local-info', {})
             state = state.get('state')
             if state == 'active':
+                action_result.add_data(self._status2)
                 action_result.update_summary({'active': self._node2})
+            else:
+                action_result.update_summary({'active': 'No active nodes'})
         else:
             action_result.update_summary({'active': 'No active nodes'})
         return action_result.set_status(phantom.APP_SUCCESS)
