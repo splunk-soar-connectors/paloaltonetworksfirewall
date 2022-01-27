@@ -265,7 +265,11 @@ class PanConnector(BaseConnector):
             if self._timeout:
                 response = requests.post(self._base_url, data=data, verify=config[phantom.APP_JSON_VERIFY], timeout=self._timeout)
             else:
-                response = requests.post(self._base_url, data=data, verify=config[phantom.APP_JSON_VERIFY])
+                response = requests.post(   # nosemgrep: python.requests.best-practice.use-timeout.use-timeout
+                    self._base_url,
+                    data=data,
+                    verify=config[phantom.APP_JSON_VERIFY]
+                )
         except Exception as e:
             self.debug_print(PAN_ERR_DEVICE_CONNECTIVITY, e)
             return self.set_status(phantom.APP_ERROR, PAN_ERR_DEVICE_CONNECTIVITY, e)
@@ -348,7 +352,11 @@ class PanConnector(BaseConnector):
             if self._timeout:
                 response = requests.post(self._base_url, data=data, verify=config[phantom.APP_JSON_VERIFY], timeout=self._timeout)
             else:
-                response = requests.post(self._base_url, data=data, verify=config[phantom.APP_JSON_VERIFY])
+                response = requests.post(   # nosemgrep: python.requests.best-practice.use-timeout.use-timeout
+                    self._base_url,
+                    data=data,
+                    verify=config[phantom.APP_JSON_VERIFY]
+                )
         except Exception as e:
             self.debug_print(PAN_ERR_DEVICE_CONNECTIVITY, e)
             return action_result.set_status(phantom.APP_ERROR, PAN_ERR_DEVICE_CONNECTIVITY, e)
