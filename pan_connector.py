@@ -14,6 +14,7 @@
 # and limitations under the License.
 #
 #
+import ipaddress
 import json
 import re
 import time
@@ -29,15 +30,6 @@ from pan_consts import *
 
 class PanConnector(BaseConnector):
 
-    # The actions supported by this connector
-    ACTION_ID_BLOCK_URL = "block_url"
-    ACTION_ID_UNBLOCK_URL = "unblock_url"
-    ACTION_ID_BLOCK_APPLICATION = "block_application"
-    ACTION_ID_UNBLOCK_APPLICATION = "unblock_application"
-    ACTION_ID_BLOCK_IP = "block_ip"
-    ACTION_ID_UNBLOCK_IP = "unblock_ip"
-    ACTION_ID_LIST_APPS = "list_apps"
-
     def __init__(self):
 
         # Call the BaseConnectors init first
@@ -45,15 +37,29 @@ class PanConnector(BaseConnector):
 
         self._base_url = None
         self._key = None
-        self._param = None
-        self._device_version = None
+        self._sec_policy = None
+
+    def _is_ip(self, input_ip_address):
+
+        try:
+            ipaddress.ip_address(str(input_ip_address))
+        except Exception:
+            return False
+
+        return True
 
     def initialize(self):
 
         config = self.get_config()
 
+        self._username = config[phantom.APP_JSON_USERNAME]
+        self._password = config[phantom.APP_JSON_PASSWORD]
+        self._device = config[phantom.APP_JSON_DEVICE]
+        self._verify = config.get(phantom.APP_JSON_VERIFY, True)
+
         # Base URL
-        self._base_url = 'https://' + config[phantom.APP_JSON_DEVICE] + '/api/'
+        self._base_url = 'https://{}/api/'.format(self._device)
+        self.set_validator('ipv6', self._is_ip)
 
         return phantom.APP_SUCCESS
 
@@ -117,65 +123,51 @@ class PanConnector(BaseConnector):
 
         return action_result.get_status()
 
-    def _get_key(self):
+    def _get_key(self, action_result):
 
-        if self._key is not None:
-            # key already created for this call
-            return phantom.APP_SUCCESS
-
-        config = self.get_config()
-
-        # Connectivity
-        self.save_progress(phantom.APP_PROG_CONNECTING_TO_ELLIPSES, config[phantom.APP_JSON_DEVICE])
-        username = config[phantom.APP_JSON_USERNAME]
-        password = config[phantom.APP_JSON_PASSWORD]
-
-        data = {'type': 'keygen', 'user': username, 'password': password}
+        data = {'type': 'keygen', 'user': self._username, 'password': self._password}
 
         try:
-            response = requests.post(self._base_url, data=data, verify=config[phantom.APP_JSON_VERIFY], timeout=PAN_DEFAULT_TIMEOUT)
+            response = requests.post(self._base_url, data=data, verify=self._verify, timeout=PAN_DEFAULT_TIMEOUT)
         except Exception as e:
-            self.debug_print(PAN_ERR_DEVICE_CONNECTIVITY, e)
-            return self.set_status(phantom.APP_ERROR, PAN_ERR_DEVICE_CONNECTIVITY, e)
+            self.debug_print("{}: {}".format(PAN_ERR_DEVICE_CONNECTIVITY, str(e)))
+            return action_result.set_status(phantom.APP_ERROR, "{}: {}".format(PAN_ERR_DEVICE_CONNECTIVITY, str(e)))
 
-        xml = response.text
-
-        # self.save_progress(PAN_PROG_GOT_REPLY)
         try:
+            xml = response.text
             response_dict = xmltodict.parse(xml)
         except Exception as e:
-            return self.set_status(phantom.APP_ERROR, PAN_ERR_UNABLE_TO_PARSE_REPLY, e)
+            return action_result.set_status(phantom.APP_ERROR, "{}: {}".format(PAN_ERR_UNABLE_TO_PARSE_REPLY, str(e)))
 
         response = response_dict.get('response')
 
         if response is None:
             message = PAN_ERR_REPLY_FORMAT_KEY_MISSING.format(key='response')
-            return self.set_status(phantom.APP_ERROR, message)
+            return action_result.set_status(phantom.APP_ERROR, message)
 
         status = response.get('@status')
 
         if status is None:
             message = PAN_ERR_REPLY_FORMAT_KEY_MISSING.format(key='response/status')
-            return self.set_status(phantom.APP_ERROR, message)
+            return action_result.set_status(phantom.APP_ERROR, message)
 
         if status != 'success':
             message = PAN_ERR_REPLY_NOT_SUCCESS.format(status=status)
-            json_resp = json.dumps(response).replace('{', ':')
-            json_resp = json_resp.replace('}', '')
+            json_resp = json.dumps(response).replace('{', ':').replace('}', '')
             message += ". Response from server: {0}".format(json_resp)
-            return self.set_status(phantom.APP_ERROR, message)
+            return action_result.set_status(phantom.APP_ERROR, message)
 
         result = response.get('result')
 
         if result is None:
             message = PAN_ERR_REPLY_FORMAT_KEY_MISSING.format(key='response/result')
-            return self.set_status(phantom.APP_ERROR, message)
+            return action_result.set_status(phantom.APP_ERROR, message)
 
         key = result.get('key')
 
         if key is None:
             message = PAN_ERR_REPLY_FORMAT_KEY_MISSING.format(key='response/result/key')
-            return self.set_status(phantom.APP_ERROR, message)
+            return action_result.set_status(phantom.APP_ERROR, message)
 
         self._key = key
 
@@ -184,56 +176,43 @@ class PanConnector(BaseConnector):
         ret_val = self._validate_version(ver_ar)
 
         if phantom.is_fail(ret_val):
-            self.set_status(ret_val, ver_ar.get_message())
-            self.append_to_message(PAN_ERR_TEST_CONNECTIVITY_FAILED)
-            return self.get_status()
+            return action_result.set_status(ret_val, ver_ar.get_message())
 
         return phantom.APP_SUCCESS
 
     def _test_connectivity(self, param):
 
-        # Progress
-        self.save_progress(PAN_PROG_USING_BASE_URL, base_url=self._base_url)
+        action_result = self.add_action_result(ActionResult(dict(param)))
 
-        status = self._get_key()
+        self.save_progress(PAN_PROG_USING_BASE_URL.format(base_url=self._base_url))
+
+        status = self._get_key(action_result)
 
         if phantom.is_fail(status):
-            self.append_to_message(PAN_ERR_TEST_CONNECTIVITY_FAILED)
-            return self.get_status()
+            self.save_progress(PAN_ERR_TEST_CONNECTIVITY_FAILED)
+            return action_result.get_status()
 
-        self.set_status_save_progress(phantom.APP_SUCCESS, PAN_SUCC_TEST_CONNECTIVITY_PASSED)
-        return self.get_status()
+        self.save_progress(PAN_SUCC_TEST_CONNECTIVITY_PASSED)
+        return action_result.set_status(phantom.APP_SUCCESS)
 
     def _make_rest_call(self, data, action_result):
 
         self.debug_print("Making rest call")
 
-        self.debug_print("_make_rest_call::data", data)
-
-        config = self.get_config()
-
         try:
-            response = requests.post(self._base_url, data=data, verify=config[phantom.APP_JSON_VERIFY], timeout=PAN_DEFAULT_TIMEOUT)
+            response = requests.post(self._base_url, data=data, verify=self._verify, timeout=PAN_DEFAULT_TIMEOUT)
         except Exception as e:
-            self.debug_print(PAN_ERR_DEVICE_CONNECTIVITY, e)
-            return action_result.set_status(phantom.APP_ERROR, PAN_ERR_DEVICE_CONNECTIVITY, e)
-
-        xml = response.text
-
-        action_result.add_debug_data(xml)
-
-        # self.debug_print("REST Response", str(xml))
+            self.debug_print("{}: {}".format(PAN_ERR_DEVICE_CONNECTIVITY, str(e)))
+            return action_result.set_status(phantom.APP_ERROR, "{}: {}".format(PAN_ERR_DEVICE_CONNECTIVITY, str(e)))
 
         try:
+            xml = response.text
             response_dict = xmltodict.parse(xml)
         except Exception as e:
-            self.save_progress(PAN_ERR_UNABLE_TO_PARSE_REPLY)
-            return action_result.set_status(phantom.APP_ERROR, PAN_ERR_UNABLE_TO_PARSE_REPLY, e)
+            self.debug_print("{}: {}".format(PAN_ERR_UNABLE_TO_PARSE_REPLY, str(e)))
+            return action_result.set_status(phantom.APP_ERROR, "{}: {}".format(PAN_ERR_UNABLE_TO_PARSE_REPLY, str(e)))
 
-        status = self._parse_response(response_dict, action_result)
-
-        if phantom.is_fail(status):
-            return action_result.get_status()
+        self._parse_response(response_dict, action_result)
 
         return action_result.get_status()
 
@@ -247,7 +226,7 @@ class PanConnector(BaseConnector):
 
         result_data = result_data[0]
 
-        rules = result_data['rules']
+        rules = result_data.get('rules', {})
 
         entries = rules.get('entry')
 
@@ -262,32 +241,29 @@ class PanConnector(BaseConnector):
             entries = entry_list
 
         for entry in entries:
-            action = entry['action']
+            action = entry.get('action')
             if action is None:
                 continue
             if isinstance(action, dict):
-                action = action['#text']
+                action = action.get('#text')
 
             if action == 'allow':
-                ret_name = entry['@name']
+                ret_name = entry.get('@name')
                 break
 
         if ret_name is None:
-            return (action_result.set_status(phantom.APP_ERROR, PAN_ERR_NO_ALLOW_POLICY_ENTRIES_FOUND), ret_name)
+            return action_result.set_status(phantom.APP_ERROR, PAN_ERR_NO_ALLOW_POLICY_ENTRIES_FOUND), ret_name
 
-        return (action_result.set_status(phantom.APP_SUCCESS), ret_name)
+        return action_result.set_status(phantom.APP_SUCCESS), ret_name
 
-    def _add_url_security_policy(self, vsys, action_result, type, name=None):
+    def _add_url_security_policy(self, vsys, action_result, type):
 
         element = SEC_POL_DEF_ELEMS
 
         sec_policy_name = SEC_POL_NAME.format(type=type)
-        allow_rule_name = self._param.get(PAN_JSON_SEC_POLICY)
+        allow_rule_name = self._sec_policy
 
-        self.debug_print("Creating Security Policy", sec_policy_name)
-
-        if type != SEC_POL_URL_TYPE:
-            return action_result.set_status(phantom.APP_ERROR, PAN_ERR_CREATE_UNKNOWN_TYPE_SEC_POL)
+        self.debug_print("Creating security policy: {}".format(sec_policy_name))
 
         # The URL policy is actually an 'allow' policy, which uses a URL Profile with block lists.
         # That's the way to block urls in PAN.
@@ -308,14 +284,10 @@ class PanConnector(BaseConnector):
             if phantom.is_fail(status):
                 return action_result.set_status(policy_list_act_res.get_status(), policy_list_act_res.get_message())
 
-            self.debug_print("Get Policies Action Result", policy_list_act_res)
-
             status, allow_rule_name = self._get_first_allow_policy(policy_list_act_res)
 
             if phantom.is_fail(status):
                 return action_result.set_status(status, policy_list_act_res.get_message())
-
-        self.debug_print("allow_rule_name", allow_rule_name)
 
         element += ACTION_NODE_ALLOW
         element += URL_PROF_SEC_POL_ELEM.format(url_prof_name=BLOCK_URL_PROF_NAME)
@@ -329,8 +301,6 @@ class PanConnector(BaseConnector):
                 'key': self._key,
                 'xpath': xpath,
                 'element': element}
-
-        self.debug_print("_add_url_security_policy::data", data)
 
         status = self._make_rest_call(data, action_result)
 
@@ -348,8 +318,6 @@ class PanConnector(BaseConnector):
                 'xpath': xpath,
                 'where': 'before',
                 'dst': allow_rule_name}
-
-        self.debug_print("_add_url_security_policy::move data", data)
 
         move_action_result = ActionResult()
 
@@ -374,11 +342,16 @@ class PanConnector(BaseConnector):
             sec_policy_name = SEC_POL_NAME.format(type=type)
             element = SEC_POL_DEF_ELEMS
 
-        self.debug_print("Creating Security Policy", sec_policy_name)
+        if self._major_version > 9:
+            element += "<source-hip><member>any</member></source-hip><destination-hip><member>any</member></destination-hip>"
+        else:
+            element += "<hip-profiles><member>any</member></hip-profiles>"
+
+        self.debug_print("Creating Security Policy: {}".format(sec_policy_name))
 
         if type == SEC_POL_URL_TYPE:
             # URL needs to be handled differently
-            return self._add_url_security_policy(vsys, action_result, type, name)
+            return self._add_url_security_policy(vsys, action_result, type)
         elif type == SEC_POL_IP_TYPE:
             element += ACTION_NODE_DENY
             element += APP_GRP_SEC_POL_ELEM.format(app_group_name="any")
@@ -390,8 +363,6 @@ class PanConnector(BaseConnector):
             element += ACTION_NODE_DENY
             element += APP_GRP_SEC_POL_ELEM.format(app_group_name=name)
             element += IP_GRP_SEC_POL_ELEM.format(ip_group_name="any")
-        else:
-            return action_result.set_status(phantom.APP_ERROR, PAN_ERR_CREATE_UNKNOWN_TYPE_SEC_POL)
 
         xpath = SEC_POL_XPATH.format(vsys=vsys, sec_policy_name=sec_policy_name)
         data = {'type': 'config',
@@ -399,8 +370,6 @@ class PanConnector(BaseConnector):
                 'key': self._key,
                 'xpath': xpath,
                 'element': element}
-
-        self.debug_print("_add_security_policy::data", data)
 
         status = self._make_rest_call(data, action_result)
 
@@ -413,8 +382,6 @@ class PanConnector(BaseConnector):
                 'key': self._key,
                 'xpath': xpath,
                 'where': 'top'}
-
-        self.debug_print("_add_security_policy::move data", data)
 
         move_action_result = ActionResult()
 
@@ -432,7 +399,7 @@ class PanConnector(BaseConnector):
 
     def _commit_config(self, action_result):
 
-        self.debug_print("Commiting the config")
+        self.debug_print("Committing the config")
 
         data = {'type': 'commit',
                 'cmd': '<commit></commit>',
@@ -451,9 +418,9 @@ class PanConnector(BaseConnector):
             return action_result.get_status()
 
         result_data = result_data.pop(0)
-        job_id = result_data['job']
+        job_id = result_data.get('job')
 
-        self.debug_print("commit job id: ", job_id)
+        self.debug_print("Commit job id: {}".format(job_id))
 
         while True:
             data = {'type': 'op',
@@ -472,12 +439,12 @@ class PanConnector(BaseConnector):
 
             # get the result_data and the job status
             result_data = status_action_result.get_data()
-            job = result_data[0]['job']
-            if job['status'] == 'FIN':
+            job = result_data[0].get('job', {})
+            if job.get('status') == 'FIN':
                 break
 
             # send the % progress
-            self.send_progress(PAN_PROG_COMMIT_PROGRESS, progress=job['progress'])
+            self.send_progress(PAN_PROG_COMMIT_PROGRESS, progress=job.get('progress'))
 
             time.sleep(2)
 
@@ -485,20 +452,19 @@ class PanConnector(BaseConnector):
 
     def _unblock_url(self, param):
 
-        status = self._get_key()
+        action_result = self.add_action_result(ActionResult(dict(param)))
+        status = self._get_key(action_result)
 
         if phantom.is_fail(status):
-            return self.get_status()
+            return action_result.get_status()
 
-        action_result = self.add_action_result(ActionResult(dict(param)))
         vsys = param.get(PAN_JSON_VSYS, 'vsys1')
 
-        self.debug_print("Removing the Blocked URL")
+        self.debug_print("Removing the blocked URL")
 
-        # Add the block url, will create the url profile if not present
         block_url = param[PAN_JSON_URL]
 
-        xpath = "{0}{1}".format(URL_PROF_XPATH.format(vsys=vsys, url_profile_name=BLOCK_URL_PROF_NAME),
+        xpath = "{0}{1}".format(URL_CAT_XPATH.format(vsys=vsys, url_category_name=BLOCK_URL_CAT_NAME),
                 DEL_URL_XPATH.format(url=block_url))
 
         data = {'type': 'config',
@@ -518,22 +484,34 @@ class PanConnector(BaseConnector):
 
     def _block_url(self, param):
 
-        status = self._get_key()
+        action_result = self.add_action_result(ActionResult(dict(param)))
+        status = self._get_key(action_result)
 
         if phantom.is_fail(status):
-            return self.get_status()
+            return action_result.get_status()
 
-        action_result = self.add_action_result(ActionResult(dict(param)))
         vsys = param.get(PAN_JSON_VSYS, 'vsys1')
+        self._sec_policy = param.get(PAN_JSON_SEC_POLICY)
 
-        self.debug_print("Adding the Block URL")
-        # Add the block url, will create the url profile if not present
+        self.debug_print("Creating custom URL category")
         block_url = param[PAN_JSON_URL]
         data = {'type': 'config',
                 'action': 'set',
                 'key': self._key,
+                'xpath': URL_CAT_XPATH.format(vsys=vsys, url_category_name=BLOCK_URL_CAT_NAME),
+                'element': URL_CAT_ELEM.format(url=block_url)}
+
+        status = self._make_rest_call(data, action_result)
+
+        if phantom.is_fail(status):
+            return action_result.get_status()
+
+        self.debug_print("Adding URL category to URL filtering profile")
+        data = {'type': 'config',
+                'action': 'set',
+                'key': self._key,
                 'xpath': URL_PROF_XPATH.format(vsys=vsys, url_profile_name=BLOCK_URL_PROF_NAME),
-                'element': URL_PROF_ELEM.format(url=block_url)}
+                'element': URL_PROF_ELEM.format(url_category_name=BLOCK_URL_CAT_NAME)}
 
         status = self._make_rest_call(data, action_result)
 
@@ -553,18 +531,18 @@ class PanConnector(BaseConnector):
 
     def _unblock_application(self, param):
 
-        status = self._get_key()
+        action_result = self.add_action_result(ActionResult(dict(param)))
+        status = self._get_key(action_result)
 
         if phantom.is_fail(status):
-            return self.get_status()
+            return action_result.get_status()
 
-        action_result = self.add_action_result(ActionResult(dict(param)))
         vsys = param.get(PAN_JSON_VSYS, 'vsys1')
 
         block_app = param[PAN_JSON_APPLICATION]
 
         xpath = "{0}{1}".format(APP_GRP_XPATH.format(vsys=vsys, app_group_name=BLOCK_APP_GROUP_NAME),
-                self._get_app_del_elem_path(block_app))
+                DEL_APP_XPATH.format(app_name=block_app))
 
         data = {'type': 'config',
                 'action': 'delete',
@@ -581,46 +559,14 @@ class PanConnector(BaseConnector):
 
         return action_result.get_status()
 
-    def _get_app_del_elem_path(self, app_name):
-
-        try:
-            version_list = self._device_version.split('.')
-            major_version = int(version_list[0])
-        except Exception as e:
-            self.debug_print("Handled exp on version parsing", e)
-            # return the default, which is known to work with the later versions
-            return DEL_APP_XPATH.format(app_name=app_name)
-
-        # Decide based on major version number
-        if major_version <= 6:
-            return DEL_APP_XPATH_VER6.format(app_name=app_name)
-
-        return DEL_APP_XPATH.format(app_name=app_name)
-
-    def _get_app_group_elem(self, app_name):
-
-        try:
-            version_list = self._device_version.split('.')
-            major_version = int(version_list[0])
-        except Exception as e:
-            self.debug_print("Handled exp on version parsing", e)
-            # return the default, which is known to work with the later versions
-            return APP_GRP_ELEM.format(app_name=app_name)
-
-        # Decide based on major version number
-        if major_version <= 6:
-            return APP_GRP_ELEM_VER6.format(app_name=app_name)
-
-        return APP_GRP_ELEM.format(app_name=app_name)
-
     def _block_application(self, param):
 
-        status = self._get_key()
+        action_result = self.add_action_result(ActionResult(dict(param)))
+        status = self._get_key(action_result)
 
         if phantom.is_fail(status):
-            return self.get_status()
+            return action_result.get_status()
 
-        action_result = self.add_action_result(ActionResult(dict(param)))
         vsys = param.get(PAN_JSON_VSYS, 'vsys1')
 
         self.debug_print("Creating the Application Group")
@@ -631,7 +577,7 @@ class PanConnector(BaseConnector):
                 'action': 'set',
                 'key': self._key,
                 'xpath': APP_GRP_XPATH.format(vsys=vsys, app_group_name=BLOCK_APP_GROUP_NAME),
-                'element': self._get_app_group_elem(block_app)}
+                'element': APP_GRP_ELEM.format(app_name=block_app)}
 
         status = self._make_rest_call(data, action_result)
 
@@ -675,7 +621,7 @@ class PanConnector(BaseConnector):
         status = self._make_rest_call(data, action_result)
 
         if phantom.is_fail(status):
-            return (action_result.get_status(), name)
+            return action_result.get_status(), name
 
         # Try to figure out the type of ip
         if block_ip.find('/') != -1:
@@ -687,7 +633,7 @@ class PanConnector(BaseConnector):
         elif phantom.is_hostname(block_ip):
             type = 'fqdn'
         else:
-            return (action_result.set_status(phantom.APP_ERROR, PAN_ERR_INVALID_IP_FORMAT), name)
+            return action_result.set_status(phantom.APP_ERROR, PAN_ERR_INVALID_IP_FORMAT), name
 
         name = self._get_addr_name(block_ip)
 
@@ -702,18 +648,18 @@ class PanConnector(BaseConnector):
         status = self._make_rest_call(data, action_result)
 
         if phantom.is_fail(status):
-            return (action_result.get_status(), name)
+            return action_result.get_status(), name
 
-        return (phantom.APP_SUCCESS, name)
+        return phantom.APP_SUCCESS, name
 
     def _unblock_ip(self, param):
 
-        status = self._get_key()
+        action_result = self.add_action_result(ActionResult(dict(param)))
+        status = self._get_key(action_result)
 
         if phantom.is_fail(status):
-            return self.get_status()
+            return action_result.get_status()
 
-        action_result = self.add_action_result(ActionResult(dict(param)))
         vsys = param.get(PAN_JSON_VSYS, 'vsys1')
 
         # Create the ip addr name
@@ -750,12 +696,12 @@ class PanConnector(BaseConnector):
 
     def _block_ip(self, param):
 
-        status = self._get_key()
+        action_result = self.add_action_result(ActionResult(dict(param)))
+        status = self._get_key(action_result)
 
         if phantom.is_fail(status):
-            return self.get_status()
+            return action_result.get_status()
 
-        action_result = self.add_action_result(ActionResult(dict(param)))
         vsys = param.get(PAN_JSON_VSYS, 'vsys1')
 
         # First create the ip
@@ -801,12 +747,11 @@ class PanConnector(BaseConnector):
 
     def _list_apps(self, param):
 
-        status = self._get_key()
+        action_result = self.add_action_result(ActionResult(dict(param)))
+        status = self._get_key(action_result)
 
         if phantom.is_fail(status):
-            return self.get_status()
-
-        action_result = self.add_action_result(ActionResult(dict(param)))
+            return action_result.get_status()
 
         # Add the address to the phantom address group
         data = {'type': 'config',
@@ -825,7 +770,7 @@ class PanConnector(BaseConnector):
             result_data = result_data.pop(0)
             result_data = result_data['application']['entry']
         except Exception as e:
-            self.debug_print("Handled exception while parsing Applications response", e)
+            self.debug_print("Handled exception while parsing applications response: {}".format(str(e)))
             return action_result.set_status(phantom.APP_ERROR, "Unable to parse applications info response")
 
         action_result.update_summary({PAN_JSON_TOTAL_APPLICATIONS: len(result_data)})
@@ -855,7 +800,7 @@ class PanConnector(BaseConnector):
             result_data = result_data.pop(0)
             device_version = result_data['system']['sw-version']
         except Exception as e:
-            self.debug_print("Handled exception while parsing sw-version", e)
+            self.debug_print("Handled exception while parsing sw-version: {}".format(str(e)))
             return action_result.set_status(phantom.APP_ERROR, "Unable to parse system info response")
 
         if not device_version:
@@ -872,17 +817,11 @@ class PanConnector(BaseConnector):
         match = re.match(version_regex, device_version)
 
         if not match:
-            message = "Version validation failed for App supported version '{0}'".format(version_regex)
-            # self.save_progress(message)
+            message = "Version validation failed for app supported version '{0}'".format(version_regex)
             return action_result.set_status(phantom.APP_ERROR, message)
 
-        self._device_version = device_version
+        self._major_version = int(device_version.split('.')[0])
 
-        return phantom.APP_SUCCESS
-
-    def validate_parameters(self, param):
-        """This app does it's own validation
-        """
         return phantom.APP_SUCCESS
 
     def handle_action(self, param):
@@ -890,23 +829,21 @@ class PanConnector(BaseConnector):
         result = None
         action = self.get_action_identifier()
 
-        self._param = param
-
         if action == phantom.ACTION_ID_TEST_ASSET_CONNECTIVITY:
             result = self._test_connectivity(param)
-        elif action == self.ACTION_ID_BLOCK_URL:
+        elif action == ACTION_ID_BLOCK_URL:
             result = self._block_url(param)
-        elif action == self.ACTION_ID_UNBLOCK_URL:
+        elif action == ACTION_ID_UNBLOCK_URL:
             result = self._unblock_url(param)
-        elif action == self.ACTION_ID_BLOCK_APPLICATION:
+        elif action == ACTION_ID_BLOCK_APPLICATION:
             result = self._block_application(param)
-        elif action == self.ACTION_ID_UNBLOCK_APPLICATION:
+        elif action == ACTION_ID_UNBLOCK_APPLICATION:
             result = self._unblock_application(param)
-        elif action == self.ACTION_ID_BLOCK_IP:
+        elif action == ACTION_ID_BLOCK_IP:
             result = self._block_ip(param)
-        elif action == self.ACTION_ID_UNBLOCK_IP:
+        elif action == ACTION_ID_UNBLOCK_IP:
             result = self._unblock_ip(param)
-        elif action == self.ACTION_ID_LIST_APPS:
+        elif action == ACTION_ID_LIST_APPS:
             result = self._list_apps(param)
 
         return result
@@ -961,7 +898,7 @@ if __name__ == '__main__':
             r2 = requests.post(login_url, verify=verify, data=data, headers=headers, timeout=PAN_DEFAULT_TIMEOUT)
             session_id = r2.cookies['sessionid']
         except Exception as e:
-            print("Unable to get session id from the platfrom. Error: " + str(e))
+            print("Unable to get session id from the platform. Error: " + str(e))
             sys.exit(1)
 
     with open(args.input_test_json) as f:

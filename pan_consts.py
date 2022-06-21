@@ -12,18 +12,18 @@
 # the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
 # either express or implied. See the License for the specific language governing permissions
 # and limitations under the License.
-PAN_ERR_REPLY_FORMAT_KEY_MISSING = "None '{key}' missing in reply from device"
+PAN_ERR_REPLY_FORMAT_KEY_MISSING = "'{key}' missing in the reply from the device"
 PAN_ERR_REPLY_NOT_SUCCESS = "REST call returned '{status}'"
 PAN_ERR_UNABLE_TO_PARSE_REPLY = "Unable to parse reply from device"
 PAN_SUCC_TEST_CONNECTIVITY_PASSED = "Test connectivity passed"
 PAN_ERR_TEST_CONNECTIVITY_FAILED = "Test connectivity failed"
 PAN_SUCC_REST_CALL_SUCCEEDED = "REST Api call succeeded"
 PAN_ERR_CREATE_UNKNOWN_TYPE_SEC_POL = "Asked to create unknown type of security policy"
-PAN_ERR_INVALID_IP_FORMAT = "Invalid ip format"
+PAN_ERR_INVALID_IP_FORMAT = "Invalid IP format"
 PAN_ERR_DEVICE_CONNECTIVITY = "Error in connecting to device"
 PAN_ERR_PARSE_POLICY_DATA = "Unable to parse security policy config"
 PAN_ERR_NO_POLICY_ENTRIES_FOUND = "Could not find any security policies to update"
-PAN_ERR_NO_ALLOW_POLICY_ENTRIES_FOUND = "Did not find any policies with an 'allow' action. Need atleast one such policy."
+PAN_ERR_NO_ALLOW_POLICY_ENTRIES_FOUND = "Did not find any policies with an 'allow' action. Need at least one such policy"
 
 PAN_PROG_USING_BASE_URL = "Using base URL '{base_url}'"
 PAN_PROG_GOT_REPLY = "Got reply, parsing..."
@@ -43,6 +43,7 @@ PAN_DEFAULT_TIMEOUT = 30
 # Name consts
 SEC_POL_NAME = "Phantom {type} Security Policy"
 SEC_POL_NAME_SRC = "Phantom src {type} Security Policy"
+BLOCK_URL_CAT_NAME = "Phantom URL Category"
 BLOCK_URL_PROF_NAME = "Phantom URL List"
 BLOCK_IP_GROUP_NAME = "Phantom Network List"
 BLOCK_IP_GROUP_NAME_SRC = "Phantom Network List Source"
@@ -68,7 +69,6 @@ SEC_POL_DEF_ELEMS += "<source><member>any</member></source>"
 SEC_POL_DEF_ELEMS += "<source-user><member>any</member></source-user>"
 SEC_POL_DEF_ELEMS += "<category><member>any</member></category>"
 SEC_POL_DEF_ELEMS += "<service><member>application-default</member></service>"
-SEC_POL_DEF_ELEMS += "<hip-profiles><member>any</member></hip-profiles>"
 SEC_POL_DEF_ELEMS += "<description>Created by Phantom, please don't edit</description>"
 
 SEC_POL_DEF_ELEMS_SRC = "<from><member>any</member></from>"
@@ -77,7 +77,6 @@ SEC_POL_DEF_ELEMS_SRC += "<destination><member>any</member></destination>"
 SEC_POL_DEF_ELEMS_SRC += "<source-user><member>any</member></source-user>"
 SEC_POL_DEF_ELEMS_SRC += "<category><member>any</member></category>"
 SEC_POL_DEF_ELEMS_SRC += "<service><member>application-default</member></service>"
-SEC_POL_DEF_ELEMS_SRC += "<hip-profiles><member>any</member></hip-profiles>"
 SEC_POL_DEF_ELEMS_SRC += "<description>Created by Phantom, please don't edit</description>"
 
 ACTION_NODE_DENY = "<action>deny</action>"
@@ -88,15 +87,16 @@ IP_GRP_SEC_POL_ELEM_SRC = "<source><member>{ip_group_name}</member></source>"
 APP_GRP_SEC_POL_ELEM = "<application><member>{app_group_name}</member></application>"
 
 URL_PROF_XPATH = "/config/devices/entry/vsys/entry[@name='{vsys}']/profiles/url-filtering/entry[@name='{url_profile_name}']"
-URL_PROF_ELEM = "<description>Created by Phantom</description><action>block</action><block-list><member>{url}</member></block-list>"
-DEL_URL_XPATH = "/block-list/member[text()='{url}']"
+URL_PROF_ELEM = "<description>Created by Phantom</description><block><member>{url_category_name}</member></block>"
+
+URL_CAT_XPATH = "/config/devices/entry/vsys/entry[@name='{vsys}']/profiles/custom-url-category/entry[@name='{url_category_name}']"
+URL_CAT_ELEM = "<description>Created by Phantom</description><list><member>{url}</member></list><type>URL List</type>"
+DEL_URL_XPATH = "/list/member[text()='{url}']"
 
 APP_GRP_XPATH = "/config/devices/entry/vsys/entry[@name='{vsys}']/application-group/entry[@name='{app_group_name}']"
 
-APP_GRP_ELEM_VER6 = "<member>{app_name}</member>"
 APP_GRP_ELEM = "<members><member>{app_name}</member></members>"
 
-DEL_APP_XPATH_VER6 = "/member[text()='{app_name}']"
 DEL_APP_XPATH = "/members/member[text()='{app_name}']"
 
 ADDR_GRP_XPATH = "/config/devices/entry/vsys/entry[@name='{vsys}']/address-group/entry[@name='{ip_group_name}']"
@@ -113,3 +113,12 @@ TAG_ELEM = "<entry name='{tag}'><color>{tag_color}</color><comments>{tag_comment
 
 APP_LIST_XPATH = "/config/predefined/application"
 SHOW_SYSTEM_INFO = "<show><system><info></info></system></show>"
+
+# The actions supported by this connector
+ACTION_ID_BLOCK_URL = "block_url"
+ACTION_ID_UNBLOCK_URL = "unblock_url"
+ACTION_ID_BLOCK_APPLICATION = "block_application"
+ACTION_ID_UNBLOCK_APPLICATION = "unblock_application"
+ACTION_ID_BLOCK_IP = "block_ip"
+ACTION_ID_UNBLOCK_IP = "unblock_ip"
+ACTION_ID_LIST_APPS = "list_apps"
