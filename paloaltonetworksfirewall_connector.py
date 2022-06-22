@@ -1,4 +1,4 @@
-# File: pan_connector.py
+# File: paloaltonetworksfirewall_connector.py
 #
 # Copyright (c) 2014-2022 Splunk Inc.
 #
@@ -25,7 +25,7 @@ import xmltodict
 from phantom.action_result import ActionResult
 from phantom.base_connector import BaseConnector
 
-from pan_consts import *
+from paloaltonetworksfirewall_consts import *
 
 
 class PanConnector(BaseConnector):
@@ -293,6 +293,11 @@ class PanConnector(BaseConnector):
         element += URL_PROF_SEC_POL_ELEM.format(url_prof_name=BLOCK_URL_PROF_NAME)
         element += APP_GRP_SEC_POL_ELEM.format(app_group_name="any")
         element += IP_GRP_SEC_POL_ELEM.format(ip_group_name="any")
+
+        if self._major_version > 9:
+            element += "<source-hip><member>any</member></source-hip><destination-hip><member>any</member></destination-hip>"
+        else:
+            element += "<hip-profiles><member>any</member></hip-profiles>"
 
         xpath = SEC_POL_XPATH.format(vsys=vsys, sec_policy_name=sec_policy_name)
 

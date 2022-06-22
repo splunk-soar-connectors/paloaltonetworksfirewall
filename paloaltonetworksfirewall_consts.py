@@ -1,4 +1,4 @@
-# File: pan_consts.py
+# File: paloaltonetworksfirewall_consts.py
 #
 # Copyright (c) 2014-2022 Splunk Inc.
 #
