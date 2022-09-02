@@ -14,6 +14,7 @@
 # and limitations under the License.
 #
 #
+import hashlib
 import ipaddress
 import json
 import re
@@ -38,11 +39,12 @@ class PanConnector(BaseConnector):
         self._base_url = None
         self._key = None
         self._sec_policy = None
+        self._ip_type = None
 
     def _is_ip(self, input_ip_address):
 
         try:
-            ipaddress.ip_address(str(input_ip_address))
+            ipaddress.ip_address(input_ip_address)
         except Exception:
             return False
 
@@ -59,7 +61,6 @@ class PanConnector(BaseConnector):
 
         # Base URL
         self._base_url = 'https://{}/api/'.format(self._device)
-        self.set_validator('ipv6', self._is_ip)
 
         return phantom.APP_SUCCESS
 
@@ -76,9 +77,9 @@ class PanConnector(BaseConnector):
             if line is None:
                 return
             if isinstance(line, list):
-                action_result.append_to_message("message: '{}'".format(', '.join(line)))
+                action_result.append_to_message("Message: '{}'".format(', '.join(line)))
             else:
-                action_result.append_to_message("message: '{}'".format(line))
+                action_result.append_to_message("Message: '{}'".format(line))
             return
 
         # Covert msg from bytes to str type
@@ -86,7 +87,7 @@ class PanConnector(BaseConnector):
             msg = msg.decode('utf-8')
         # parse it as a string
         if type(msg) == str:
-            action_result.append_to_message("message: '{}'".format(msg))
+            action_result.append_to_message("Message: '{}'".format(msg))
 
         return
 
@@ -112,7 +113,7 @@ class PanConnector(BaseConnector):
 
         code = response.get('@code')
         if code is not None:
-            action_result.append_to_message("code: '{}'".format(code))
+            action_result.append_to_message("Code: '{}'".format(code))
 
         self._parse_response_msg(response, action_result)
 
@@ -130,13 +131,14 @@ class PanConnector(BaseConnector):
         try:
             response = requests.post(self._base_url, data=data, verify=self._verify, timeout=PAN_DEFAULT_TIMEOUT)
         except Exception as e:
-            self.debug_print("{}: {}".format(PAN_ERR_DEVICE_CONNECTIVITY, str(e)))
+            self.error_print(PAN_ERR_DEVICE_CONNECTIVITY, e)
             return action_result.set_status(phantom.APP_ERROR, "{}: {}".format(PAN_ERR_DEVICE_CONNECTIVITY, str(e)))
 
         try:
             xml = response.text
             response_dict = xmltodict.parse(xml)
         except Exception as e:
+            self.error_print(PAN_ERR_UNABLE_TO_PARSE_REPLY, e)
             return action_result.set_status(phantom.APP_ERROR, "{}: {}".format(PAN_ERR_UNABLE_TO_PARSE_REPLY, str(e)))
 
         response = response_dict.get('response')
@@ -202,14 +204,14 @@ class PanConnector(BaseConnector):
         try:
             response = requests.post(self._base_url, data=data, verify=self._verify, timeout=PAN_DEFAULT_TIMEOUT)
         except Exception as e:
-            self.debug_print("{}: {}".format(PAN_ERR_DEVICE_CONNECTIVITY, str(e)))
+            self.error_print(PAN_ERR_DEVICE_CONNECTIVITY, e)
             return action_result.set_status(phantom.APP_ERROR, "{}: {}".format(PAN_ERR_DEVICE_CONNECTIVITY, str(e)))
 
         try:
             xml = response.text
             response_dict = xmltodict.parse(xml)
         except Exception as e:
-            self.debug_print("{}: {}".format(PAN_ERR_UNABLE_TO_PARSE_REPLY, str(e)))
+            self.error_print(PAN_ERR_UNABLE_TO_PARSE_REPLY, e)
             return action_result.set_status(phantom.APP_ERROR, "{}: {}".format(PAN_ERR_UNABLE_TO_PARSE_REPLY, str(e)))
 
         self._parse_response(response_dict, action_result)
@@ -363,7 +365,7 @@ class PanConnector(BaseConnector):
             if use_source:
                 element += IP_GRP_SEC_POL_ELEM_SRC.format(ip_group_name=block_ip_grp)
             else:
-                element += IP_GRP_SEC_POL_ELEM.format(ip_group_name=BLOCK_IP_GROUP_NAME)
+                element += IP_GRP_SEC_POL_ELEM.format(ip_group_name=block_ip_grp)
         elif type == SEC_POL_APP_TYPE:
             element += ACTION_NODE_DENY
             element += APP_GRP_SEC_POL_ELEM.format(app_group_name=name)
@@ -604,14 +606,37 @@ class PanConnector(BaseConnector):
 
         # Remove the slash in the ip if present, PAN does not like slash in the names
         rem_slash = lambda x: re.sub(r'(.*)/(.*)', r'\1 mask \2', x)
+        if self._ip_type == "ip-wildcard":
+            rem_slash = lambda x: re.sub(r'(.*)/(.*)', r'\1 wildcard mask \2', x)
 
-        name = "{0} {1}".format(rem_slash(ip), PHANTOM_ADDRESS_NAME)
+        new_ip = ip.replace("-", " - ").replace(":", "-")
+        if not new_ip[0].isalnum():
+            name = "{0} {1}".format(PHANTOM_ADDRESS_NAME, rem_slash(new_ip))
+        else:
+            name = "{0} {1}".format(rem_slash(new_ip), PHANTOM_ADDRESS_NAME)
+
+        # Object name can't exceed 63 characters
+        if len(name) > 63:
+            name = hashlib.sha224(ip.encode('utf-8')).hexdigest()
 
         return name
 
+    def find_ip_type(self, ip):
+        if ip.find('/') != -1:
+            try:
+                int(ip.split('/')[1])
+                self._ip_type = 'ip-netmask'
+            except Exception:
+                self._ip_type = 'ip-wildcard'
+        elif ip.find('-') != -1:
+            self._ip_type = 'ip-range'
+        elif self._is_ip(ip):
+            self._ip_type = 'ip-netmask'
+        elif phantom.is_hostname(ip):
+            self._ip_type = 'fqdn'
+
     def _add_address(self, vsys, block_ip, action_result):
 
-        type = None
         name = None
 
         tag = self.get_container_id()
@@ -629,26 +654,25 @@ class PanConnector(BaseConnector):
             return action_result.get_status(), name
 
         # Try to figure out the type of ip
-        if block_ip.find('/') != -1:
-            type = 'ip-netmask'
-        elif block_ip.find('-') != -1:
-            type = 'ip-range'
-        elif phantom.is_ip(block_ip):
-            type = 'ip-netmask'
-        elif phantom.is_hostname(block_ip):
-            type = 'fqdn'
-        else:
+        self.find_ip_type(block_ip)
+        if not self._ip_type:
             return action_result.set_status(phantom.APP_ERROR, PAN_ERR_INVALID_IP_FORMAT), name
 
         name = self._get_addr_name(block_ip)
 
         address_xpath = IP_ADDR_XPATH.format(vsys=vsys, ip_addr_name=name)
 
+        if self._ip_type == "ip-wildcard":
+            # Wildcards do not support tags
+            element = IP_ADDR_ELEM_WITHOUT_TAG.format(type=self._ip_type, ip=block_ip)
+        else:
+           element = IP_ADDR_ELEM.format(type=self._ip_type, ip=block_ip, tag=tag)
+
         data = {'type': 'config',
                 'action': 'set',
                 'key': self._key,
                 'xpath': address_xpath,
-                'element': IP_ADDR_ELEM.format(type=type, ip=block_ip, tag=tag)}
+                'element': element}
 
         status = self._make_rest_call(data, action_result)
 
@@ -669,18 +693,37 @@ class PanConnector(BaseConnector):
 
         # Create the ip addr name
         unblock_ip = param[PAN_JSON_IP]
+        # Sanitize the ip value
+        unblock_ip = unblock_ip.replace(" ", "").strip("/").strip("-")
 
-        # check and pass to create policy
+        if not unblock_ip:
+            return action_result.set_status(phantom.APP_ERROR, PAN_ERR_INVALID_IP_FORMAT)
+
+        # Try to figure out the type of ip
+        self.find_ip_type(unblock_ip)
+        if not self._ip_type:
+            return action_result.set_status(phantom.APP_ERROR, PAN_ERR_INVALID_IP_FORMAT)
+
         use_source = param.get(PAN_JSON_SOURCE_ADDRESS, PAN_DEFAULT_SOURCE_ADDRESS)
 
         if use_source:
             block_ip_grp = BLOCK_IP_GROUP_NAME_SRC
+            sec_policy_name = SEC_POL_NAME_SRC.format(type='IP')
+            entry_type = "source"
         else:
             block_ip_grp = BLOCK_IP_GROUP_NAME
+            sec_policy_name = SEC_POL_NAME.format(type='IP')
+            entry_type = "destination"
 
         addr_name = self._get_addr_name(unblock_ip)
 
-        xpath = "{0}{1}".format(ADDR_GRP_XPATH.format(vsys=vsys, ip_group_name=block_ip_grp),
+        if self._ip_type == "ip-wildcard":
+            # Remove the entry of the IP from the rule
+            xpath = "{}/{entry_type}/member[text()='{addr_name}']".format(SEC_POL_XPATH.format(vsys=vsys, sec_policy_name=sec_policy_name),
+                entry_type=entry_type, addr_name=addr_name)
+        else:
+            # Remove the entry of the IP from the address group
+            xpath = "{0}{1}".format(ADDR_GRP_XPATH.format(vsys=vsys, ip_group_name=block_ip_grp),
                 DEL_ADDR_GRP_XPATH.format(addr_name=addr_name))
 
         # Remove the address from the phantom address group
@@ -713,6 +756,10 @@ class PanConnector(BaseConnector):
         self.debug_print("Adding the IP Group")
 
         block_ip = param[PAN_JSON_IP]
+        # Sanitize the ip value
+        block_ip = block_ip.replace(" ", "").strip("/").strip("-")
+        if not block_ip:
+            return action_result.set_status(phantom.APP_ERROR, PAN_ERR_INVALID_IP_FORMAT)
 
         # check and pass to create policy
         use_source = param.get(PAN_JSON_SOURCE_ADDRESS, PAN_DEFAULT_SOURCE_ADDRESS)
@@ -727,17 +774,22 @@ class PanConnector(BaseConnector):
         if phantom.is_fail(status):
             return action_result.get_status()
 
-        # Add the address to the phantom address group
-        data = {'type': 'config',
-                'action': 'set',
-                'key': self._key,
-                'xpath': ADDR_GRP_XPATH.format(vsys=vsys, ip_group_name=block_ip_grp),
-                'element': ADDR_GRP_ELEM.format(addr_name=addr_name)}
+        self.debug_print(f"IP type: {self._ip_type}")
+        if self._ip_type == 'ip-wildcard':
+            # Wildcard IP has to be added to the security policy rule
+            block_ip_grp = addr_name
+        else:
+            # Add the address to the phantom address group
+            data = {'type': 'config',
+                    'action': 'set',
+                    'key': self._key,
+                    'xpath': ADDR_GRP_XPATH.format(vsys=vsys, ip_group_name=block_ip_grp),
+                    'element': ADDR_GRP_ELEM.format(addr_name=addr_name)}
 
-        status = self._make_rest_call(data, action_result)
+            status = self._make_rest_call(data, action_result)
 
-        if phantom.is_fail(status):
-            return action_result.get_status()
+            if phantom.is_fail(status):
+                return action_result.get_status()
 
         # Create the policy
         status = self._add_security_policy(vsys, action_result, SEC_POL_IP_TYPE, use_source=use_source, block_ip_grp=block_ip_grp)
@@ -769,18 +821,41 @@ class PanConnector(BaseConnector):
         if phantom.is_fail(status):
             return action_result.get_status()
 
+        results = list()
         try:
             # Move things around, so that result data is an array of applications
-            result_data = action_result.get_data()
-            result_data = result_data.pop(0)
-            result_data = result_data['application']['entry']
+            result_data = action_result.get_data().pop(0)
+            applications = result_data.get('application')
+            if applications:
+                results.extend(result_data['application']['entry'])
         except Exception as e:
-            self.debug_print("Handled exception while parsing applications response: {}".format(str(e)))
-            return action_result.set_status(phantom.APP_ERROR, "Unable to parse applications info response")
+            self.error_print("Handled exception while parsing predefined applications response", e)
+            return action_result.set_status(phantom.APP_ERROR, PAN_ERR_APP_RESPONSE)
 
-        action_result.update_summary({PAN_JSON_TOTAL_APPLICATIONS: len(result_data)})
+        vsys = param.get(PAN_JSON_VSYS, 'vsys1')
+        # Fetch the list of vsys visible custom applications
+        data['xpath'] = CUSTOM_APP_LIST_XPATH.format(vsys=vsys)
 
-        action_result.update_data(result_data)
+        status = self._make_rest_call(data, action_result)
+
+        if phantom.is_fail(status):
+            return action_result.get_status()
+
+        if "Code: '7'" in action_result.get_message():
+            return action_result.set_status(phantom.APP_ERROR, PAN_REST_CALL_FAILED.format(code="7", message="Object not present"))
+
+        try:
+            result_data = action_result.get_data().pop(0)
+            applications = result_data.get('application')
+            if applications:
+                results.extend(result_data['application']['entry'])
+        except Exception as e:
+            self.error_print("Handled exception while parsing custom applications response", e)
+            return action_result.set_status(phantom.APP_ERROR, PAN_ERR_APP_RESPONSE)
+
+        action_result.update_data(results)
+
+        action_result.update_summary({PAN_JSON_TOTAL_APPLICATIONS: len(results)})
 
         return action_result.set_status(phantom.APP_SUCCESS)
 
@@ -805,7 +880,7 @@ class PanConnector(BaseConnector):
             result_data = result_data.pop(0)
             device_version = result_data['system']['sw-version']
         except Exception as e:
-            self.debug_print("Handled exception while parsing sw-version: {}".format(str(e)))
+            self.error_print("Handled exception while parsing sw-version", e)
             return action_result.set_status(phantom.APP_ERROR, "Unable to parse system info response")
 
         if not device_version:

@@ -17,13 +17,15 @@ PAN_ERR_REPLY_NOT_SUCCESS = "REST call returned '{status}'"
 PAN_ERR_UNABLE_TO_PARSE_REPLY = "Unable to parse reply from device"
 PAN_SUCC_TEST_CONNECTIVITY_PASSED = "Test connectivity passed"
 PAN_ERR_TEST_CONNECTIVITY_FAILED = "Test connectivity failed"
-PAN_SUCC_REST_CALL_SUCCEEDED = "REST Api call succeeded"
+PAN_SUCC_REST_CALL_SUCCEEDED = "REST API call succeeded"
+PAN_REST_CALL_FAILED = "REST API returned code: '{code}'. Message: '{message}'"
 PAN_ERR_CREATE_UNKNOWN_TYPE_SEC_POL = "Asked to create unknown type of security policy"
 PAN_ERR_INVALID_IP_FORMAT = "Invalid IP format"
-PAN_ERR_DEVICE_CONNECTIVITY = "Error in connecting to device"
+PAN_ERR_DEVICE_CONNECTIVITY = "Error while connecting to device"
 PAN_ERR_PARSE_POLICY_DATA = "Unable to parse security policy config"
 PAN_ERR_NO_POLICY_ENTRIES_FOUND = "Could not find any security policies to update"
 PAN_ERR_NO_ALLOW_POLICY_ENTRIES_FOUND = "Did not find any policies with an 'allow' action. Need at least one such policy"
+PAN_ERR_APP_RESPONSE = "Unable to parse application info response"
 
 PAN_PROG_USING_BASE_URL = "Using base URL '{base_url}'"
 PAN_PROG_GOT_REPLY = "Got reply, parsing..."
@@ -105,6 +107,7 @@ DEL_ADDR_GRP_XPATH = "/static/member[text()='{addr_name}']"
 
 IP_ADDR_XPATH = "/config/devices/entry/vsys/entry[@name='{vsys}']/address/entry[@name='{ip_addr_name}']"
 IP_ADDR_ELEM = "<{type}>{ip}</{type}><tag><member>{tag}</member></tag>"
+IP_ADDR_ELEM_WITHOUT_TAG = "<{type}>{ip}</{type}>"
 
 TAG_CONTAINER_COMMENT = "Phantom Container ID"
 TAG_COLOR = "color7"
@@ -112,6 +115,7 @@ TAG_XPATH = "/config/devices/entry/vsys/entry[@name='{vsys}']/tag"
 TAG_ELEM = "<entry name='{tag}'><color>{tag_color}</color><comments>{tag_comment}</comments></entry>"
 
 APP_LIST_XPATH = "/config/predefined/application"
+CUSTOM_APP_LIST_XPATH = "/config/devices/entry/vsys/entry[@name='{vsys}']/application"
 SHOW_SYSTEM_INFO = "<show><system><info></info></system></show>"
 
 # The actions supported by this connector

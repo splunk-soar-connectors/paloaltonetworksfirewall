@@ -11,7 +11,7 @@
     "product_vendor": "Palo Alto Networks",
     "product_name": "Firewall",
     "product_version_regex": ".*",
-    "min_phantom_version": "5.2.0",
+    "min_phantom_version": "5.3.0",
     "latest_tested_versions": [
         "On prem, Software Version 10.2.1"
     ],
@@ -148,7 +148,7 @@
                     "column_name": "Message",
                     "column_order": 2,
                     "example_values": [
-                        "REST Api call succeeded. code: '19'"
+                        "REST API call succeeded. Code: '19'"
                     ]
                 },
                 {
@@ -243,7 +243,7 @@
                     "column_name": "Message",
                     "column_order": 2,
                     "example_values": [
-                        "REST Api call succeeded. code: '19'"
+                        "REST API call succeeded. Code: '19'"
                     ]
                 },
                 {
@@ -336,7 +336,7 @@
                     "column_name": "Message",
                     "column_order": 2,
                     "example_values": [
-                        "REST Api call succeeded. code: '19'"
+                        "REST API call succeeded. Code: '19'"
                     ]
                 },
                 {
@@ -429,7 +429,7 @@
                     "column_name": "Message",
                     "column_order": 2,
                     "example_values": [
-                        "REST Api call succeeded. code: '19'"
+                        "REST API call succeeded. Code: '19'"
                     ]
                 },
                 {
@@ -452,7 +452,7 @@
         {
             "action": "block ip",
             "description": "Block an IP",
-            "verbose": "This action uses a multistep approach to block an IP.  It behaves differently based upon whether <b>is_source_address</b> is true or not.  By default, it is false.  The approach is:<ul><li>Create an address entry named '<b>[ip_address] Added By Phantom</b>' with the specified IP address<li>The container id of the phantom action is added as a tag to the address entry when it's created<li>If <b>is_source_address</b> is false:<br><ul><li>add this entry to an address group called <b>Phantom Network List</b></li><li>configure the address group as a <i>destination</i> to the policy named <b>Phantom IP Security Policy</b>.<br>The <b>Phantom IP Security Policy</b> policy is created with the following properties:<br><ul><li>from: any<li>to: any<li>source: any<li>destination: <b>Phantom Network List</b><li>source-user: any<li>category: any<li>service: application-default<li>hip-profiles: any / source-hip: any, destination-hip: any<li>description: Created by Phantom, please don't edit<li>action: deny<li>application: any</ul></li></ul>If <b>is_source_address</b> is true:<br><ul><li>add this entry to an address group called <b>Phantom Network List Source</b><li>configure the address group as a <i>source</i> to the policy named <b>Phantom src IP Security Policy.</b>The <b>Phantom src IP Security Policy</b> policy is created with the following properties:<br><ul><li>from: any<li>to: any<li>source: <b>Phantom Network List Source</b><li>destination: any<li>source-user: any<li>category: any<li>service: application-default<li>hip-profiles: any / source-hip: any, destination-hip: any<li>description: Created by Phantom, please don't edit<li>action: deny<li>application: any</ul></li></ul><li>The policy is created if not found on the device.</li><li>The action then proceeds to <b>commit</b> the changes.</ul>NOTE: Multiple <b>block ip</b> actions will <i>not</i> result in multiple policies or groups.<br>If the action parameter <b>vsys</b> is not specified then <b>'vsys1'</b> is used by default.",
+            "verbose": "This action uses a multistep approach to block an IP.  It behaves differently based upon whether <b>is_source_address</b> is true or not.  By default, it is false.  The approach is:<ul><li>Create an address entry with the specified IP address<li>The container id of the phantom action is added as a tag to the address entry when it's created<li>If <b>is_source_address</b> is false:<br><ul><li>add this entry to an address group called <b>Phantom Network List</b></li><li>configure the address group as a <i>destination</i> to the policy named <b>Phantom IP Security Policy</b>.<br>The <b>Phantom IP Security Policy</b> policy is created with the following properties:<br><ul><li>from: any<li>to: any<li>source: any<li>destination: <b>Phantom Network List</b><li>source-user: any<li>category: any<li>service: application-default<li>hip-profiles: any / source-hip: any, destination-hip: any<li>description: Created by Phantom, please don't edit<li>action: deny<li>application: any</ul></li></ul>If <b>is_source_address</b> is true:<br><ul><li>add this entry to an address group called <b>Phantom Network List Source</b><li>configure the address group as a <i>source</i> to the policy named <b>Phantom src IP Security Policy.</b>The <b>Phantom src IP Security Policy</b> policy is created with the following properties:<br><ul><li>from: any<li>to: any<li>source: <b>Phantom Network List Source</b><li>destination: any<li>source-user: any<li>category: any<li>service: application-default<li>hip-profiles: any / source-hip: any, destination-hip: any<li>description: Created by Phantom, please don't edit<li>action: deny<li>application: any</ul></li></ul><li>The policy is created if not found on the device.</li><li>The action then proceeds to <b>commit</b> the changes.</ul>NOTE: If the IP is of type wildcard mask, the address object is created without a tag and is directly added to the security policy. Multiple <b>block ip</b> actions will <i>not</i> result in multiple policies or groups.<br>If the action parameter <b>vsys</b> is not specified then <b>'vsys1'</b> is used by default.",
             "type": "contain",
             "identifier": "block_ip",
             "undo": "unblock ip",
@@ -464,7 +464,7 @@
                     "order": 0,
                     "contains": [
                         "ip",
-                        "ipv6"
+                        "ip network"
                     ],
                     "primary": true,
                     "required": true
@@ -505,7 +505,7 @@
                     "column_order": 0,
                     "contains": [
                         "ip",
-                        "ipv6"
+                        "ip network"
                     ]
                 },
                 {
@@ -534,7 +534,7 @@
                     "column_name": "Message",
                     "column_order": 2,
                     "example_values": [
-                        "REST Api call succeeded. code: '19'"
+                        "REST API call succeeded. Code: '19'"
                     ]
                 },
                 {
@@ -561,7 +561,7 @@
             "identifier": "unblock_ip",
             "read_only": false,
             "undo": "block ip",
-            "verbose": "</p>This action removes the IP from a specific Address Group depending upon whether <b>is_source_address</b> is true.  By default, it is false.</p>if <b>is_source_address</b> is false:<ul><li>This action removes the IP from the <b>Phantom Network List</b> Address Group.</li></ul>If <b>is_source_address</b> is true:<ul><li>This action removes the IP from the <b>Phantom Network Source list</b> Address Group.</li></ul><p>Afterwards, the action proceeds to <b>commit</b> the configuration.<br>If the action parameter <b>vsys</b> is not specified then <b>'vsys1'</b> is used by default.",
+            "verbose": "</p>This action removes the IP from a specific Address Group depending upon whether <b>is_source_address</b> is true.  By default, it is false.</p>if <b>is_source_address</b> is false:<ul><li>This action removes the IP from the <b>Phantom Network List</b> Address Group.</li></ul>If <b>is_source_address</b> is true:<ul><li>This action removes the IP from the <b>Phantom Network Source list</b> Address Group.</li></ul><p>Afterwards, the action proceeds to <b>commit</b> the configuration.<br>If the action parameter <b>vsys</b> is not specified then <b>'vsys1'</b> is used by default.<br/> NOTE: If the IP is of type wildcard mask, the action removes the IP from the security policy",
             "parameters": {
                 "ip": {
                     "description": "IP to unblock",
@@ -569,7 +569,7 @@
                     "order": 0,
                     "contains": [
                         "ip",
-                        "ipv6"
+                        "ip network"
                     ],
                     "primary": true,
                     "required": true
@@ -610,7 +610,7 @@
                     "column_order": 0,
                     "contains": [
                         "ip",
-                        "ipv6"
+                        "ip network"
                     ]
                 },
                 {
@@ -642,7 +642,7 @@
                     "column_name": "Message",
                     "column_order": 2,
                     "example_values": [
-                        "REST Api call succeeded. code: '19'"
+                        "REST API call succeeded. Code: '19'"
                     ]
                 },
                 {
@@ -664,11 +664,18 @@
         },
         {
             "action": "list applications",
-            "description": "List the applications that the device knows about and can block",
+            "description": "List the applications that the device knows about and can block. If the action parameter <b>vsys</b> is not specified then <b>'vsys1'</b> is used by default.",
             "type": "investigate",
             "identifier": "list_apps",
             "read_only": true,
-            "parameters": {},
+            "parameters": {
+                "vsys": {
+                    "description": "Virtual system (vsys)",
+                    "data_type": "string",
+                    "order": 0,
+                    "default": "vsys1"
+                }
+            },
             "render": {
                 "type": "table",
                 "width": 12,
@@ -683,6 +690,10 @@
                         "success",
                         "failed"
                     ]
+                },
+                {
+                    "data_path": "action_result.parameter.vsys",
+                    "data_type": "string"
                 },
                 {
                     "data_path": "action_result.data.*.@id",
@@ -1432,7 +1443,7 @@
                 {
                     "data_path": "action_result.data.*.used-by-malware",
                     "data_type": "string",
-                    "column_name": "Used by Malware",
+                    "column_name": "Used By Malware",
                     "column_order": 3,
                     "example_values": [
                         "yes"
@@ -1495,7 +1506,7 @@
             },
             {
                 "module": "urllib3",
-                "input_file": "wheels/shared/urllib3-1.26.9-py2.py3-none-any.whl"
+                "input_file": "wheels/shared/urllib3-1.26.12-py2.py3-none-any.whl"
             },
             {
                 "module": "xmltodict",
