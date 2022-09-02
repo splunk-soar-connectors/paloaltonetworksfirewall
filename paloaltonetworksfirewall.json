@@ -561,7 +561,7 @@
             "identifier": "unblock_ip",
             "read_only": false,
             "undo": "block ip",
-            "verbose": "</p>This action removes the IP from a specific Address Group depending upon whether <b>is_source_address</b> is true.  By default, it is false.</p>if <b>is_source_address</b> is false:<ul><li>This action removes the IP from the <b>Phantom Network List</b> Address Group.</li></ul>If <b>is_source_address</b> is true:<ul><li>This action removes the IP from the <b>Phantom Network Source list</b> Address Group.</li></ul><p>Afterwards, the action proceeds to <b>commit</b> the configuration.<br>If the action parameter <b>vsys</b> is not specified then <b>'vsys1'</b> is used by default.<br/> NOTE: If the IP is of type wildcard mask, the action removes the IP from the security policy",
+            "verbose": "</p>This action removes the IP from a specific Address Group depending upon whether <b>is_source_address</b> is true.  By default, it is false.</p>if <b>is_source_address</b> is false:<ul><li>This action removes the IP from the <b>Phantom Network List</b> Address Group.</li></ul>If <b>is_source_address</b> is true:<ul><li>This action removes the IP from the <b>Phantom Network Source list</b> Address Group.</li></ul><p>Afterwards, the action proceeds to <b>commit</b> the configuration.<br>If the action parameter <b>vsys</b> is not specified then <b>'vsys1'</b> is used by default.<br/> NOTE: If the IP is of type wildcard mask, the action removes the IP from the security policy.",
             "parameters": {
                 "ip": {
                     "description": "IP to unblock",
@@ -664,7 +664,7 @@
         },
         {
             "action": "list applications",
-            "description": "List the applications that the device knows about and can block. If the action parameter <b>vsys</b> is not specified then <b>'vsys1'</b> is used by default.",
+            "description": "List the applications that the device knows about and can block. If the action parameter 'vsys' is not specified then 'vsys1' is used by default",
             "type": "investigate",
             "identifier": "list_apps",
             "read_only": true,
