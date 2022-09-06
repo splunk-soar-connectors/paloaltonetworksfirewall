@@ -617,7 +617,7 @@ class PanConnector(BaseConnector):
 
         # Object name can't exceed 63 characters
         if len(name) > 63:
-            name = hashlib.sha224(ip.encode('utf-8')).hexdigest()
+            name = hashlib.sha256(ip.encode('utf-8')).hexdigest()[:-1]
 
         return name
 
