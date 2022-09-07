@@ -11,7 +11,7 @@
     "product_vendor": "Palo Alto Networks",
     "product_name": "Firewall",
     "product_version_regex": ".*",
-    "min_phantom_version": "5.3.0",
+    "min_phantom_version": "5.3.3",
     "latest_tested_versions": [
         "On prem, Software Version 10.2.1"
     ],
