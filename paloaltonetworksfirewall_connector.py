@@ -209,6 +209,9 @@ class PanConnector(BaseConnector):
 
         try:
             xml = response.text
+            if hasattr(action_result, 'add_debug_data'):
+                action_result.add_debug_data({'r_text': xml})
+
             response_dict = xmltodict.parse(xml)
         except Exception as e:
             self.error_print(PAN_ERR_UNABLE_TO_PARSE_REPLY, e)
