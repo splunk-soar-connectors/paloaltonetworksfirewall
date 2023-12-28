@@ -1,6 +1,6 @@
 # File: paloaltonetworksfirewall_connector.py
 #
-# Copyright (c) 2014-2022 Splunk Inc.
+# Copyright (c) 2014-2023 Splunk Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -107,7 +107,7 @@ class PanConnector(BaseConnector):
             return action_result.set_status(phantom.APP_ERROR, PAN_ERR_REPLY_FORMAT_KEY_MISSING.format(key='response/status'))
 
         if status != 'success':
-            action_result.set_status(phantom.APP_ERROR, PAN_ERR_REPLY_NOT_SUCCESS.format(status=status))
+            action_result.set_status(phantom.APP_ERROR, PAN_ERR_REPLY_NOT_SUCC.format(status=status))
         else:
             action_result.set_status(phantom.APP_SUCCESS, PAN_SUCC_REST_CALL_SUCCEEDED)
 
@@ -154,7 +154,7 @@ class PanConnector(BaseConnector):
             return action_result.set_status(phantom.APP_ERROR, message)
 
         if status != 'success':
-            message = PAN_ERR_REPLY_NOT_SUCCESS.format(status=status)
+            message = PAN_ERR_REPLY_NOT_SUCC.format(status=status)
             json_resp = json.dumps(response).replace('{', ':').replace('}', '')
             message += ". Response from server: {0}".format(json_resp)
             return action_result.set_status(phantom.APP_ERROR, message)
