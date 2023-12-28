@@ -19,7 +19,7 @@
     "fips_compliant": true,
     "logo": "logo_paloaltonetworks.svg",
     "logo_dark": "logo_paloaltonetworks_dark.svg",
-    "license": "Copyright (c) 2014-2022 Splunk Inc.",
+    "license": "Copyright (c) 2014-2023 Splunk Inc.",
     "configuration": {
         "device": {
             "data_type": "string",
