@@ -1,6 +1,6 @@
 # File: paloaltonetworksfirewall_consts.py
 #
-# Copyright (c) 2014-2022 Splunk Inc.
+# Copyright (c) 2014-2023 Splunk Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
 # either express or implied. See the License for the specific language governing permissions
 # and limitations under the License.
 PAN_ERR_REPLY_FORMAT_KEY_MISSING = "'{key}' missing in the reply from the device"
-PAN_ERR_REPLY_NOT_SUCCESS = "REST call returned '{status}'"
+PAN_ERR_REPLY_NOT_SUCC = "REST call returned '{status}'"
 PAN_ERR_UNABLE_TO_PARSE_REPLY = "Unable to parse reply from device"
 PAN_SUCC_TEST_CONNECTIVITY_PASSED = "Test connectivity passed"
 PAN_ERR_TEST_CONNECTIVITY_FAILED = "Test connectivity failed"
