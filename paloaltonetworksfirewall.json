@@ -1497,5 +1497,8 @@
                 "input_file": "wheels/shared/xmltodict-0.12.0-py2.py3-none-any.whl"
             }
         ]
+    },
+    "pip39_dependencies": {
+        "wheel": []
     }
 }
