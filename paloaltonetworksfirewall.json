@@ -15,7 +15,7 @@
     "latest_tested_versions": [
         "On prem, Software Version 10.2.1"
     ],
-    "python_version": "3",
+    "python_version": ["3.9", "3.13"],
     "fips_compliant": true,
     "logo": "logo_paloaltonetworks.svg",
     "logo_dark": "logo_paloaltonetworks_dark.svg",
