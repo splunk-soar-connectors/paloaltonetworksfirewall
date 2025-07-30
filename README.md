@@ -1,7 +1,7 @@
 # Palo Alto Networks Firewall
 
 Publisher: Splunk \
-Connector Version: 2.1.2 \
+Connector Version: 2.1.3 \
 Product Vendor: Palo Alto Networks \
 Product Name: Firewall \
 Minimum Product Version: 5.3.3
