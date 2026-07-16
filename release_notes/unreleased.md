@@ -1,2 +1,2 @@
 **Unreleased**
-* Refresh connector tooling baseline
+* Validate values before interpolating them into PAN-OS XPath expressions

@@ -30,6 +30,9 @@ from paloaltonetworksfirewall_consts import *
 
 
 class PanConnector(BaseConnector):
+    _XPATH_META_RE = re.compile(r"['\"\[\]]")
+    _IP_META_CHARS = frozenset("'\"<>&|[]")
+
     def __init__(self):
         # Call the BaseConnectors init first
         super().__init__()
@@ -117,6 +120,20 @@ class PanConnector(BaseConnector):
             action_result.add_data(result)
 
         return action_result.get_status()
+
+    def _validate_action_parameters(self, param):
+        for param_name in (PAN_JSON_VSYS, PAN_JSON_URL, PAN_JSON_APPLICATION):
+            value = param.get(param_name)
+            if value is not None and (not isinstance(value, str) or self._XPATH_META_RE.search(value)):
+                return f"Invalid value for '{param_name}' parameter"
+
+        ip_value = param.get(PAN_JSON_IP)
+        if ip_value is not None and (
+            not isinstance(ip_value, str) or len(ip_value) > 255 or any(char in self._IP_META_CHARS for char in ip_value)
+        ):
+            return f"Invalid value for '{PAN_JSON_IP}' parameter"
+
+        return None
 
     def _get_key(self, action_result):
         data = {"type": "keygen", "user": self._username, "password": self._password}
@@ -851,6 +868,11 @@ class PanConnector(BaseConnector):
     def handle_action(self, param):
         result = None
         action = self.get_action_identifier()
+
+        validation_error = self._validate_action_parameters(param)
+        if validation_error:
+            action_result = self.add_action_result(ActionResult(dict(param)))
+            return action_result.set_status(phantom.APP_ERROR, validation_error)
 
         if action == phantom.ACTION_ID_TEST_ASSET_CONNECTIVITY:
             result = self._test_connectivity(param)
