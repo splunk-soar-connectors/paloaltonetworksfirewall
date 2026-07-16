@@ -29,6 +29,19 @@ from phantom.base_connector import BaseConnector
 from paloaltonetworksfirewall_consts import *
 
 
+MAX_XML_REPLY_BYTES = 10 * 1024 * 1024
+DOCTYPE_RE = re.compile(rb"<!DOCTYPE", re.IGNORECASE)
+
+
+def _safe_xml_to_dict(xml_text):
+    data = xml_text.encode("utf-8", errors="replace") if isinstance(xml_text, str) else xml_text
+    if len(data) > MAX_XML_REPLY_BYTES:
+        raise ValueError(f"XML reply exceeds the {MAX_XML_REPLY_BYTES}-byte limit")
+    if DOCTYPE_RE.search(data):
+        raise ValueError("XML reply contains a prohibited DOCTYPE declaration")
+    return xmltodict.parse(data)
+
+
 class PanConnector(BaseConnector):
     _XPATH_META_RE = re.compile(r"['\"\[\]]")
     _IP_META_CHARS = frozenset("'\"<>&|[]")
@@ -146,7 +159,7 @@ class PanConnector(BaseConnector):
 
         try:
             xml = response.text
-            response_dict = xmltodict.parse(xml)
+            response_dict = _safe_xml_to_dict(xml)
         except Exception as e:
             self.error_print(PAN_ERR_UNABLE_TO_PARSE_REPLY, e)
             return action_result.set_status(phantom.APP_ERROR, f"{PAN_ERR_UNABLE_TO_PARSE_REPLY}: {e!s}")
@@ -220,7 +233,7 @@ class PanConnector(BaseConnector):
             if hasattr(action_result, "add_debug_data"):
                 action_result.add_debug_data({"r_text": xml})
 
-            response_dict = xmltodict.parse(xml)
+            response_dict = _safe_xml_to_dict(xml)
         except Exception as e:
             self.error_print(PAN_ERR_UNABLE_TO_PARSE_REPLY, e)
             return action_result.set_status(phantom.APP_ERROR, f"{PAN_ERR_UNABLE_TO_PARSE_REPLY}: {e!s}")
