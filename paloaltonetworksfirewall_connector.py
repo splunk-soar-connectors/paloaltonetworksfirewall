@@ -19,6 +19,7 @@ import ipaddress
 import json
 import re
 import time
+from xml.sax.saxutils import escape as xml_escape
 
 import phantom.app as phantom
 import requests
@@ -497,7 +498,7 @@ class PanConnector(BaseConnector):
             "action": "set",
             "key": self._key,
             "xpath": URL_CAT_XPATH.format(vsys=vsys, url_category_name=BLOCK_URL_CAT_NAME),
-            "element": URL_CAT_ELEM.format(url=block_url),
+            "element": URL_CAT_ELEM.format(url=xml_escape(block_url)),
         }
 
         status = self._make_rest_call(data, action_result)
@@ -573,7 +574,7 @@ class PanConnector(BaseConnector):
             "action": "set",
             "key": self._key,
             "xpath": APP_GRP_XPATH.format(vsys=vsys, app_group_name=BLOCK_APP_GROUP_NAME),
-            "element": APP_GRP_ELEM.format(app_name=block_app),
+            "element": APP_GRP_ELEM.format(app_name=xml_escape(block_app)),
         }
 
         status = self._make_rest_call(data, action_result)
