@@ -1,6 +1,6 @@
 # File: paloaltonetworksfirewall_connector.py
 #
-# Copyright (c) 2014-2025 Splunk Inc.
+# Copyright (c) 2014-2026 Splunk Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ import ipaddress
 import json
 import re
 import time
+from xml.sax.saxutils import escape as xml_escape
 
 import phantom.app as phantom
 import requests
@@ -29,7 +30,23 @@ from phantom.base_connector import BaseConnector
 from paloaltonetworksfirewall_consts import *
 
 
+MAX_XML_REPLY_BYTES = 10 * 1024 * 1024
+DOCTYPE_RE = re.compile(rb"<!DOCTYPE", re.IGNORECASE)
+
+
+def _safe_xml_to_dict(xml_text):
+    data = xml_text.encode("utf-8", errors="replace") if isinstance(xml_text, str) else xml_text
+    if len(data) > MAX_XML_REPLY_BYTES:
+        raise ValueError(f"XML reply exceeds the {MAX_XML_REPLY_BYTES}-byte limit")
+    if DOCTYPE_RE.search(data):
+        raise ValueError("XML reply contains a prohibited DOCTYPE declaration")
+    return xmltodict.parse(data)
+
+
 class PanConnector(BaseConnector):
+    _XPATH_META_RE = re.compile(r"['\"\[\]]")
+    _IP_META_CHARS = frozenset("'\"<>&|[]")
+
     def __init__(self):
         # Call the BaseConnectors init first
         super().__init__()
@@ -118,6 +135,20 @@ class PanConnector(BaseConnector):
 
         return action_result.get_status()
 
+    def _validate_action_parameters(self, param):
+        for param_name in (PAN_JSON_VSYS, PAN_JSON_URL, PAN_JSON_APPLICATION):
+            value = param.get(param_name)
+            if value is not None and (not isinstance(value, str) or self._XPATH_META_RE.search(value)):
+                return f"Invalid value for '{param_name}' parameter"
+
+        ip_value = param.get(PAN_JSON_IP)
+        if ip_value is not None and (
+            not isinstance(ip_value, str) or len(ip_value) > 255 or any(char in self._IP_META_CHARS for char in ip_value)
+        ):
+            return f"Invalid value for '{PAN_JSON_IP}' parameter"
+
+        return None
+
     def _get_key(self, action_result):
         data = {"type": "keygen", "user": self._username, "password": self._password}
 
@@ -129,7 +160,7 @@ class PanConnector(BaseConnector):
 
         try:
             xml = response.text
-            response_dict = xmltodict.parse(xml)
+            response_dict = _safe_xml_to_dict(xml)
         except Exception as e:
             self.error_print(PAN_ERR_UNABLE_TO_PARSE_REPLY, e)
             return action_result.set_status(phantom.APP_ERROR, f"{PAN_ERR_UNABLE_TO_PARSE_REPLY}: {e!s}")
@@ -203,7 +234,7 @@ class PanConnector(BaseConnector):
             if hasattr(action_result, "add_debug_data"):
                 action_result.add_debug_data({"r_text": xml})
 
-            response_dict = xmltodict.parse(xml)
+            response_dict = _safe_xml_to_dict(xml)
         except Exception as e:
             self.error_print(PAN_ERR_UNABLE_TO_PARSE_REPLY, e)
             return action_result.set_status(phantom.APP_ERROR, f"{PAN_ERR_UNABLE_TO_PARSE_REPLY}: {e!s}")
@@ -394,10 +425,14 @@ class PanConnector(BaseConnector):
 
         result_data = result_data.pop(0)
         job_id = result_data.get("job")
+        if not job_id:
+            return action_result.set_status(phantom.APP_ERROR, "Commit response did not contain a job ID")
 
         self.debug_print(f"Commit job id: {job_id}")
 
-        while True:
+        deadline = time.monotonic() + PAN_COMMIT_MAX_WAIT_SECS
+        job = {}
+        while time.monotonic() <= deadline:
             data = {"type": "op", "key": self._key, "cmd": f"<show><jobs><id>{job_id}</id></jobs></show>"}
 
             status_action_result = ActionResult()
@@ -405,8 +440,10 @@ class PanConnector(BaseConnector):
             status = self._make_rest_call(data, status_action_result)
 
             if phantom.is_fail(status):
-                action_result.set_status(phantom.APP_SUCCESS, status_action_result.get_message())
-                return action_result.get_status()
+                return action_result.set_status(
+                    phantom.APP_ERROR,
+                    f"Failed to query commit job '{job_id}': {status_action_result.get_message()}",
+                )
 
             self.debug_print("status", status_action_result)
 
@@ -420,6 +457,25 @@ class PanConnector(BaseConnector):
             self.send_progress(PAN_PROG_COMMIT_PROGRESS, progress=job.get("progress"))
 
             time.sleep(2)
+        else:
+            return action_result.set_status(
+                phantom.APP_ERROR,
+                f"Commit job '{job_id}' did not finish within {PAN_COMMIT_MAX_WAIT_SECS} seconds",
+            )
+
+        job_result = job.get("result")
+        if job_result != "OK":
+            details = job.get("details")
+            if isinstance(details, dict):
+                details = details.get("line")
+            if isinstance(details, list):
+                details = ", ".join(str(item) for item in details)
+
+            message = f"Commit job '{job_id}' finished with result '{job_result}'"
+            if details:
+                message += f". Details: {details}"
+            message = message.replace("{", "{{").replace("}", "}}")
+            return action_result.set_status(phantom.APP_ERROR, message)
 
         return action_result.get_status()
 
@@ -467,7 +523,7 @@ class PanConnector(BaseConnector):
             "action": "set",
             "key": self._key,
             "xpath": URL_CAT_XPATH.format(vsys=vsys, url_category_name=BLOCK_URL_CAT_NAME),
-            "element": URL_CAT_ELEM.format(url=block_url),
+            "element": URL_CAT_ELEM.format(url=xml_escape(block_url)),
         }
 
         status = self._make_rest_call(data, action_result)
@@ -543,7 +599,7 @@ class PanConnector(BaseConnector):
             "action": "set",
             "key": self._key,
             "xpath": APP_GRP_XPATH.format(vsys=vsys, app_group_name=BLOCK_APP_GROUP_NAME),
-            "element": APP_GRP_ELEM.format(app_name=block_app),
+            "element": APP_GRP_ELEM.format(app_name=xml_escape(block_app)),
         }
 
         status = self._make_rest_call(data, action_result)
@@ -851,6 +907,11 @@ class PanConnector(BaseConnector):
     def handle_action(self, param):
         result = None
         action = self.get_action_identifier()
+
+        validation_error = self._validate_action_parameters(param)
+        if validation_error:
+            action_result = self.add_action_result(ActionResult(dict(param)))
+            return action_result.set_status(phantom.APP_ERROR, validation_error)
 
         if action == phantom.ACTION_ID_TEST_ASSET_CONNECTIVITY:
             result = self._test_connectivity(param)

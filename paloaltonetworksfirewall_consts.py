@@ -1,6 +1,6 @@
 # File: paloaltonetworksfirewall_consts.py
 #
-# Copyright (c) 2014-2025 Splunk Inc.
+# Copyright (c) 2014-2026 Splunk Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -41,6 +41,7 @@ PAN_JSON_SEC_POLICY = "sec_policy"
 PAN_JSON_SOURCE_ADDRESS = "is_source_address"
 PAN_DEFAULT_SOURCE_ADDRESS = False
 PAN_DEFAULT_TIMEOUT = 30
+PAN_COMMIT_MAX_WAIT_SECS = 1800
 
 # Name consts
 SEC_POL_NAME = "Phantom {type} Security Policy"
