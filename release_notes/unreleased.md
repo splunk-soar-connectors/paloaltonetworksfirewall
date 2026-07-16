@@ -2,3 +2,4 @@
 * Validate values before interpolating them into PAN-OS XPath expressions
 * Reject oversized XML replies and documents containing DTD declarations
 * Escape URL and application values embedded in configuration XML
+* Bound commit polling and fail actions when commit jobs fail

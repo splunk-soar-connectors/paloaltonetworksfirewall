@@ -425,10 +425,14 @@ class PanConnector(BaseConnector):
 
         result_data = result_data.pop(0)
         job_id = result_data.get("job")
+        if not job_id:
+            return action_result.set_status(phantom.APP_ERROR, "Commit response did not contain a job ID")
 
         self.debug_print(f"Commit job id: {job_id}")
 
-        while True:
+        deadline = time.monotonic() + PAN_COMMIT_MAX_WAIT_SECS
+        job = {}
+        while time.monotonic() <= deadline:
             data = {"type": "op", "key": self._key, "cmd": f"<show><jobs><id>{job_id}</id></jobs></show>"}
 
             status_action_result = ActionResult()
@@ -436,8 +440,10 @@ class PanConnector(BaseConnector):
             status = self._make_rest_call(data, status_action_result)
 
             if phantom.is_fail(status):
-                action_result.set_status(phantom.APP_SUCCESS, status_action_result.get_message())
-                return action_result.get_status()
+                return action_result.set_status(
+                    phantom.APP_ERROR,
+                    f"Failed to query commit job '{job_id}': {status_action_result.get_message()}",
+                )
 
             self.debug_print("status", status_action_result)
 
@@ -451,6 +457,25 @@ class PanConnector(BaseConnector):
             self.send_progress(PAN_PROG_COMMIT_PROGRESS, progress=job.get("progress"))
 
             time.sleep(2)
+        else:
+            return action_result.set_status(
+                phantom.APP_ERROR,
+                f"Commit job '{job_id}' did not finish within {PAN_COMMIT_MAX_WAIT_SECS} seconds",
+            )
+
+        job_result = job.get("result")
+        if job_result != "OK":
+            details = job.get("details")
+            if isinstance(details, dict):
+                details = details.get("line")
+            if isinstance(details, list):
+                details = ", ".join(str(item) for item in details)
+
+            message = f"Commit job '{job_id}' finished with result '{job_result}'"
+            if details:
+                message += f". Details: {details}"
+            message = message.replace("{", "{{").replace("}", "}}")
+            return action_result.set_status(phantom.APP_ERROR, message)
 
         return action_result.get_status()
 
