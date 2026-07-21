@@ -355,10 +355,10 @@ class PanConnector(BaseConnector):
     def _add_security_policy(self, vsys, action_result, type, name=None, use_source=False, block_ip_grp=None):
         if use_source:
             sec_policy_name = SEC_POL_NAME_SRC.format(type=type)
-            element = SEC_POL_DEF_ELEMS_SRC
+            element = SEC_POL_DENY_DEF_ELEMS_SRC
         else:
             sec_policy_name = SEC_POL_NAME.format(type=type)
-            element = SEC_POL_DEF_ELEMS
+            element = SEC_POL_DENY_DEF_ELEMS
 
         if self._major_version > 9:
             element += "<source-hip><member>any</member></source-hip><destination-hip><member>any</member></destination-hip>"
