@@ -284,36 +284,14 @@ class PanConnector(BaseConnector):
         return action_result.set_status(phantom.APP_SUCCESS), ret_name
 
     def _add_url_security_policy(self, vsys, action_result, type):
-        element = SEC_POL_DEF_ELEMS
-
+        element = SEC_POL_DENY_DEF_ELEMS.replace(
+            "<category><member>any</member></category>",
+            URL_CAT_SEC_POL_ELEM.format(url_category_name=BLOCK_URL_CAT_NAME),
+        )
         sec_policy_name = SEC_POL_NAME.format(type=type)
-        allow_rule_name = self._sec_policy
 
         self.debug_print(f"Creating security policy: {sec_policy_name}")
-
-        # The URL policy is actually an 'allow' policy, which uses a URL Profile with block lists.
-        # That's the way to block urls in PAN.
-        # So the policy needs to be placed just before the topmost 'allow' policy for things to work properly.
-        # So get the list of all the security policies, we need to parse through them to get the first 'allow'
-        # However if the user has already supplied a policy name, then use that.
-
-        if allow_rule_name is None:
-            data = {"type": "config", "action": "get", "key": self._key, "xpath": SEC_POL_RULES_XPATH.format(vsys=vsys)}
-
-            policy_list_act_res = ActionResult()
-
-            status = self._make_rest_call(data, policy_list_act_res)
-
-            if phantom.is_fail(status):
-                return action_result.set_status(policy_list_act_res.get_status(), policy_list_act_res.get_message())
-
-            status, allow_rule_name = self._get_first_allow_policy(policy_list_act_res)
-
-            if phantom.is_fail(status):
-                return action_result.set_status(status, policy_list_act_res.get_message())
-
-        element += ACTION_NODE_ALLOW
-        element += URL_PROF_SEC_POL_ELEM.format(url_prof_name=BLOCK_URL_PROF_NAME)
+        element += ACTION_NODE_DENY
         element += APP_GRP_SEC_POL_ELEM.format(app_group_name="any")
         element += IP_GRP_SEC_POL_ELEM.format(ip_group_name="any")
 
@@ -331,12 +309,8 @@ class PanConnector(BaseConnector):
         if phantom.is_fail(status):
             return action_result.get_status()
 
-        if allow_rule_name == sec_policy_name:
-            # We are the first allow rule, so no need to move
-            return action_result.get_status()
-
-        # move it to the top of the first policy with an allow action
-        data = {"type": "config", "action": "move", "key": self._key, "xpath": xpath, "where": "before", "dst": allow_rule_name}
+        # A connector-owned URL deny rule must precede every allow rule.
+        data = {"type": "config", "action": "move", "key": self._key, "xpath": xpath, "where": "top"}
 
         move_action_result = ActionResult()
 
@@ -537,20 +511,6 @@ class PanConnector(BaseConnector):
         if phantom.is_fail(status):
             return action_result.get_status()
 
-        self.debug_print("Adding URL category to URL filtering profile")
-        data = {
-            "type": "config",
-            "action": "set",
-            "key": self._key,
-            "xpath": URL_PROF_XPATH.format(vsys=vsys, url_profile_name=BLOCK_URL_PROF_NAME),
-            "element": URL_PROF_ELEM.format(url_category_name=BLOCK_URL_CAT_NAME),
-        }
-
-        status = self._make_rest_call(data, action_result)
-
-        if phantom.is_fail(status):
-            return action_result.get_status()
-
         # Create the policy
         status = self._add_security_policy(vsys, action_result, SEC_POL_URL_TYPE)
 
@@ -563,6 +523,10 @@ class PanConnector(BaseConnector):
         if not phantom.is_fail(status) and is_pathful_url:
             action_result.append_to_message(
                 "Warning: the pathful URL was blocked exactly as supplied; its host and subdomains are not covered."
+            )
+        if not phantom.is_fail(status) and self._sec_policy:
+            action_result.append_to_message(
+                "The sec_policy parameter is no longer used; the connector URL deny policy is moved to the top of the rulebase."
             )
 
         return action_result.get_status()

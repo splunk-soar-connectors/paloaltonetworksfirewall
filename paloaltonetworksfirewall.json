@@ -64,7 +64,7 @@
             "identifier": "block_url",
             "read_only": false,
             "undo": "unblock url",
-            "verbose": "This action does the following to block an URL:<ul><li>Create an URL category object named <b>Phantom URL Category</b>, if not found.</li><li>Add the URL to block to this category.</li><li>Create an URL Filtering profile object named <b>Phantom URL List</b>, if not found.</li><li>Add the Phantom URL Category to this profile.</li><li>Re-Configure the policy <b>Phantom URL Security Policy</b> to use the created URL Filtering profile.<br>The policy is created if not found.</li><li>Move the policy above the <b>sec_policy</b> if specified, else move it before the first detected <i>allow</i> policy.</li><li>The action then proceeds to <b>commit</b> the changes.</li></ul>NOTE: Multiple <b>block url</b> actions will <i>not</i> result in multiple categories/policies.<br>The <b>Phantom URL Security Policy</b> policy is created with the following properties:<br><ul><li>from: any</li><li>to: any</li><li>source: any</li><li>destination: any</li><li>source-user: any</li><li>category: any</li><li>service: application-default</li><li>hip-profiles: any / source-hip: any, destination-hip: any</li><li>description: Created by Phantom, please don't edit</li><li>action: allow</li><li>application: any</li></ul>.",
+            "verbose": "This action adds the URL to the <b>Phantom URL Category</b>, then creates or migrates the connector-owned <b>Phantom URL Security Policy</b> into a top-priority deny rule that matches that category before committing the changes. The rule remains as an inert deny rule when its category is empty. Bare hosts block both the apex and subdomains; pathful URLs remain exact. The legacy <b>sec_policy</b> parameter is ignored because the deny rule is always moved to the top of the rulebase.",
             "parameters": {
                 "url": {
                     "description": "URL to block",
@@ -88,7 +88,7 @@
                     "default": "vsys1"
                 },
                 "sec_policy": {
-                    "description": "Insert above this policy",
+                    "description": "Deprecated and ignored; the connector URL deny policy is always moved to the top of the rulebase",
                     "data_type": "string",
                     "order": 3
                 }

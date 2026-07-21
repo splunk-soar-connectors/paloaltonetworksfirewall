@@ -90,6 +90,7 @@ SEC_POL_DENY_DEF_ELEMS_SRC = SEC_POL_DEF_ELEMS_SRC.replace(
 
 ACTION_NODE_DENY = "<action>deny</action>"
 ACTION_NODE_ALLOW = "<action>allow</action>"
+URL_CAT_SEC_POL_ELEM = "<category><member>{url_category_name}</member></category>"
 URL_PROF_SEC_POL_ELEM = "<profile-setting><profiles><url-filtering><member>{url_prof_name}</member></url-filtering></profiles></profile-setting>"
 IP_GRP_SEC_POL_ELEM = "<destination><member>{ip_group_name}</member></destination>"
 IP_GRP_SEC_POL_ELEM_SRC = "<source><member>{ip_group_name}</member></source>"
