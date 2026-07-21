@@ -59,7 +59,7 @@
         },
         {
             "action": "block url",
-            "description": "Block an URL",
+            "description": "Block a URL; bare hosts also block their subdomains, while pathful URLs remain exact",
             "type": "contain",
             "identifier": "block_url",
             "read_only": false,

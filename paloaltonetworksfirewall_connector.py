@@ -19,6 +19,7 @@ import ipaddress
 import json
 import re
 import time
+from urllib.parse import urlsplit
 from xml.sax.saxutils import escape as xml_escape
 
 import phantom.app as phantom
@@ -491,15 +492,19 @@ class PanConnector(BaseConnector):
         self.debug_print("Removing the blocked URL")
 
         block_url = param[PAN_JSON_URL]
+        for category_member in self._url_category_members(block_url)[0]:
+            xpath = "{0}{1}".format(URL_CAT_XPATH.format(vsys=vsys, url_category_name=BLOCK_URL_CAT_NAME),
+                    DEL_URL_XPATH.format(url=category_member))
 
-        xpath = f"{URL_CAT_XPATH.format(vsys=vsys, url_category_name=BLOCK_URL_CAT_NAME)}{DEL_URL_XPATH.format(url=block_url)}"
+            data = {'type': 'config',
+                    'action': 'delete',
+                    'key': self._key,
+                    'xpath': xpath}
 
-        data = {"type": "config", "action": "delete", "key": self._key, "xpath": xpath}
+            status = self._make_rest_call(data, action_result)
 
-        status = self._make_rest_call(data, action_result)
-
-        if phantom.is_fail(status):
-            return action_result.get_status()
+            if phantom.is_fail(status):
+                return action_result.get_status()
 
         # Now Commit the config
         status = self._commit_config(action_result)
@@ -518,13 +523,14 @@ class PanConnector(BaseConnector):
 
         self.debug_print("Creating custom URL category")
         block_url = param[PAN_JSON_URL]
-        data = {
-            "type": "config",
-            "action": "set",
-            "key": self._key,
-            "xpath": URL_CAT_XPATH.format(vsys=vsys, url_category_name=BLOCK_URL_CAT_NAME),
-            "element": URL_CAT_ELEM.format(url=xml_escape(block_url)),
-        }
+        category_members, is_pathful_url = self._url_category_members(block_url)
+        data = {'type': 'config',
+                'action': 'set',
+                'key': self._key,
+                'xpath': URL_CAT_XPATH.format(vsys=vsys, url_category_name=BLOCK_URL_CAT_NAME),
+                'element': URL_CAT_ELEM.format(
+                    members="".join(URL_CAT_MEMBER_ELEM.format(url=xml_escape(member)) for member in category_members)
+                )}
 
         status = self._make_rest_call(data, action_result)
 
@@ -554,7 +560,27 @@ class PanConnector(BaseConnector):
         # Now Commit the config
         status = self._commit_config(action_result)
 
+        if not phantom.is_fail(status) and is_pathful_url:
+            action_result.append_to_message(
+                "Warning: the pathful URL was blocked exactly as supplied; its host and subdomains are not covered."
+            )
+
         return action_result.get_status()
+
+    def _url_category_members(self, url):
+        """Return category members and whether the input intentionally remains path-specific."""
+        candidate = url.strip()
+        parsed = urlsplit(candidate if '://' in candidate else '//{}'.format(candidate))
+        host = parsed.hostname
+
+        if host and parsed.path in ('', '/') and not parsed.query and not parsed.fragment:
+            try:
+                ipaddress.ip_address(host)
+            except ValueError:
+                return ('{}/'.format(host), '*.{}/'.format(host)), False
+            return ('{}/'.format(host),), False
+
+        return (url,), True
 
     def _unblock_application(self, param):
         action_result = self.add_action_result(ActionResult(dict(param)))

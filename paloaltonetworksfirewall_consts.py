@@ -93,7 +93,8 @@ URL_PROF_XPATH = "/config/devices/entry/vsys/entry[@name='{vsys}']/profiles/url-
 URL_PROF_ELEM = "<description>Created by Phantom</description><block><member>{url_category_name}</member></block>"
 
 URL_CAT_XPATH = "/config/devices/entry/vsys/entry[@name='{vsys}']/profiles/custom-url-category/entry[@name='{url_category_name}']"
-URL_CAT_ELEM = "<description>Created by Phantom</description><list><member>{url}</member></list><type>URL List</type>"
+URL_CAT_ELEM = "<description>Created by Phantom</description><list>{members}</list><type>URL List</type>"
+URL_CAT_MEMBER_ELEM = "<member>{url}</member>"
 DEL_URL_XPATH = "/list/member[text()='{url}']"
 
 APP_GRP_XPATH = "/config/devices/entry/vsys/entry[@name='{vsys}']/application-group/entry[@name='{app_group_name}']"
