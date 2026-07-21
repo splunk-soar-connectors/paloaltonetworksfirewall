@@ -611,8 +611,6 @@ class PanConnector(BaseConnector):
     def _get_addr_name(self, ip):
         # Remove the slash in the ip if present, PAN does not like slash in the names
         rem_slash = lambda x: re.sub(r"(.*)/(.*)", r"\1 mask \2", x)
-        if self._ip_type == "ip-wildcard":
-            rem_slash = lambda x: re.sub(r"(.*)/(.*)", r"\1 wildcard mask \2", x)
 
         new_ip = ip.replace("-", " - ").replace(":", "-")
         if not new_ip[0].isalnum():
@@ -627,14 +625,26 @@ class PanConnector(BaseConnector):
         return name
 
     def find_ip_type(self, ip):
+        self._ip_type = None
         if ip.find("/") != -1:
             try:
-                int(ip.split("/")[1])
-                self._ip_type = "ip-netmask"
-            except Exception:
-                self._ip_type = "ip-wildcard"
+                network = ipaddress.ip_network(ip, strict=False)
+            except ValueError:
+                return
+            if network.prefixlen == 0:
+                return
+            self._ip_type = "ip-netmask"
         elif ip.find("-") != -1:
-            self._ip_type = "ip-range"
+            try:
+                start, end = ip.split('-', 1)
+                start_ip = ipaddress.ip_address(start)
+                end_ip = ipaddress.ip_address(end)
+            except ValueError:
+                if phantom.is_hostname(ip):
+                    self._ip_type = "fqdn"
+                return
+            if start_ip.version == end_ip.version and int(start_ip) <= int(end_ip):
+                self._ip_type = "ip-range"
         elif self._is_ip(ip):
             self._ip_type = "ip-netmask"
         elif phantom.is_hostname(ip):
@@ -668,11 +678,7 @@ class PanConnector(BaseConnector):
 
         address_xpath = IP_ADDR_XPATH.format(vsys=vsys, ip_addr_name=name)
 
-        if self._ip_type == "ip-wildcard":
-            # Wildcards do not support tags
-            element = IP_ADDR_ELEM_WITHOUT_TAG.format(type=self._ip_type, ip=block_ip)
-        else:
-            element = IP_ADDR_ELEM.format(type=self._ip_type, ip=block_ip, tag=tag)
+        element = IP_ADDR_ELEM.format(type=self._ip_type, ip=block_ip, tag=tag)
 
         data = {"type": "config", "action": "set", "key": self._key, "xpath": address_xpath, "element": element}
 
@@ -718,12 +724,8 @@ class PanConnector(BaseConnector):
 
         addr_name = self._get_addr_name(unblock_ip)
 
-        if self._ip_type == "ip-wildcard":
-            # Remove the entry of the IP from the rule
-            xpath = f"{SEC_POL_XPATH.format(vsys=vsys, sec_policy_name=sec_policy_name)}/{entry_type}/member[text()='{addr_name}']"
-        else:
-            # Remove the entry of the IP from the address group
-            xpath = f"{ADDR_GRP_XPATH.format(vsys=vsys, ip_group_name=block_ip_grp)}{DEL_ADDR_GRP_XPATH.format(addr_name=addr_name)}"
+        # Remove the entry of the IP from the address group
+        xpath = f"{ADDR_GRP_XPATH.format(vsys=vsys, ip_group_name=block_ip_grp)}{DEL_ADDR_GRP_XPATH.format(addr_name=addr_name)}"
 
         # Remove the address from the phantom address group
         data = {"type": "config", "action": "delete", "key": self._key, "xpath": xpath}
@@ -770,23 +772,19 @@ class PanConnector(BaseConnector):
             return action_result.get_status()
 
         self.debug_print(f"IP type: {self._ip_type}")
-        if self._ip_type == "ip-wildcard":
-            # Wildcard IP has to be added to the security policy rule
-            block_ip_grp = addr_name
-        else:
-            # Add the address to the phantom address group
-            data = {
-                "type": "config",
-                "action": "set",
-                "key": self._key,
-                "xpath": ADDR_GRP_XPATH.format(vsys=vsys, ip_group_name=block_ip_grp),
-                "element": ADDR_GRP_ELEM.format(addr_name=addr_name),
-            }
+        # Add the address to the phantom address group
+        data = {
+            "type": "config",
+            "action": "set",
+            "key": self._key,
+            "xpath": ADDR_GRP_XPATH.format(vsys=vsys, ip_group_name=block_ip_grp),
+            "element": ADDR_GRP_ELEM.format(addr_name=addr_name),
+        }
 
-            status = self._make_rest_call(data, action_result)
+        status = self._make_rest_call(data, action_result)
 
-            if phantom.is_fail(status):
-                return action_result.get_status()
+        if phantom.is_fail(status):
+            return action_result.get_status()
 
         # Create the policy
         status = self._add_security_policy(vsys, action_result, SEC_POL_IP_TYPE, use_source=use_source, block_ip_grp=block_ip_grp)
