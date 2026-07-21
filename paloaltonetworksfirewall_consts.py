@@ -73,6 +73,9 @@ SEC_POL_DEF_ELEMS += "<source-user><member>any</member></source-user>"
 SEC_POL_DEF_ELEMS += "<category><member>any</member></category>"
 SEC_POL_DEF_ELEMS += "<service><member>application-default</member></service>"
 SEC_POL_DEF_ELEMS += "<description>Created by Phantom, please don't edit</description>"
+SEC_POL_DENY_DEF_ELEMS = SEC_POL_DEF_ELEMS.replace(
+    "<service><member>application-default</member></service>", "<service><member>any</member></service>"
+)
 
 SEC_POL_DEF_ELEMS_SRC = "<from><member>any</member></from>"
 SEC_POL_DEF_ELEMS_SRC += "<to><member>any</member></to>"
@@ -81,9 +84,13 @@ SEC_POL_DEF_ELEMS_SRC += "<source-user><member>any</member></source-user>"
 SEC_POL_DEF_ELEMS_SRC += "<category><member>any</member></category>"
 SEC_POL_DEF_ELEMS_SRC += "<service><member>application-default</member></service>"
 SEC_POL_DEF_ELEMS_SRC += "<description>Created by Phantom, please don't edit</description>"
+SEC_POL_DENY_DEF_ELEMS_SRC = SEC_POL_DEF_ELEMS_SRC.replace(
+    "<service><member>application-default</member></service>", "<service><member>any</member></service>"
+)
 
 ACTION_NODE_DENY = "<action>deny</action>"
 ACTION_NODE_ALLOW = "<action>allow</action>"
+URL_CAT_SEC_POL_ELEM = "<category><member>{url_category_name}</member></category>"
 URL_PROF_SEC_POL_ELEM = "<profile-setting><profiles><url-filtering><member>{url_prof_name}</member></url-filtering></profiles></profile-setting>"
 IP_GRP_SEC_POL_ELEM = "<destination><member>{ip_group_name}</member></destination>"
 IP_GRP_SEC_POL_ELEM_SRC = "<source><member>{ip_group_name}</member></source>"
@@ -93,7 +100,8 @@ URL_PROF_XPATH = "/config/devices/entry/vsys/entry[@name='{vsys}']/profiles/url-
 URL_PROF_ELEM = "<description>Created by Phantom</description><block><member>{url_category_name}</member></block>"
 
 URL_CAT_XPATH = "/config/devices/entry/vsys/entry[@name='{vsys}']/profiles/custom-url-category/entry[@name='{url_category_name}']"
-URL_CAT_ELEM = "<description>Created by Phantom</description><list><member>{url}</member></list><type>URL List</type>"
+URL_CAT_ELEM = "<description>Created by Phantom</description><list>{members}</list><type>URL List</type>"
+URL_CAT_MEMBER_ELEM = "<member>{url}</member>"
 DEL_URL_XPATH = "/list/member[text()='{url}']"
 
 APP_GRP_XPATH = "/config/devices/entry/vsys/entry[@name='{vsys}']/application-group/entry[@name='{app_group_name}']"

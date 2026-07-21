@@ -19,6 +19,7 @@ import ipaddress
 import json
 import re
 import time
+from urllib.parse import urlsplit
 from xml.sax.saxutils import escape as xml_escape
 
 import phantom.app as phantom
@@ -283,36 +284,14 @@ class PanConnector(BaseConnector):
         return action_result.set_status(phantom.APP_SUCCESS), ret_name
 
     def _add_url_security_policy(self, vsys, action_result, type):
-        element = SEC_POL_DEF_ELEMS
-
+        element = SEC_POL_DENY_DEF_ELEMS.replace(
+            "<category><member>any</member></category>",
+            URL_CAT_SEC_POL_ELEM.format(url_category_name=BLOCK_URL_CAT_NAME),
+        )
         sec_policy_name = SEC_POL_NAME.format(type=type)
-        allow_rule_name = self._sec_policy
 
         self.debug_print(f"Creating security policy: {sec_policy_name}")
-
-        # The URL policy is actually an 'allow' policy, which uses a URL Profile with block lists.
-        # That's the way to block urls in PAN.
-        # So the policy needs to be placed just before the topmost 'allow' policy for things to work properly.
-        # So get the list of all the security policies, we need to parse through them to get the first 'allow'
-        # However if the user has already supplied a policy name, then use that.
-
-        if allow_rule_name is None:
-            data = {"type": "config", "action": "get", "key": self._key, "xpath": SEC_POL_RULES_XPATH.format(vsys=vsys)}
-
-            policy_list_act_res = ActionResult()
-
-            status = self._make_rest_call(data, policy_list_act_res)
-
-            if phantom.is_fail(status):
-                return action_result.set_status(policy_list_act_res.get_status(), policy_list_act_res.get_message())
-
-            status, allow_rule_name = self._get_first_allow_policy(policy_list_act_res)
-
-            if phantom.is_fail(status):
-                return action_result.set_status(status, policy_list_act_res.get_message())
-
-        element += ACTION_NODE_ALLOW
-        element += URL_PROF_SEC_POL_ELEM.format(url_prof_name=BLOCK_URL_PROF_NAME)
+        element += ACTION_NODE_DENY
         element += APP_GRP_SEC_POL_ELEM.format(app_group_name="any")
         element += IP_GRP_SEC_POL_ELEM.format(ip_group_name="any")
 
@@ -330,12 +309,8 @@ class PanConnector(BaseConnector):
         if phantom.is_fail(status):
             return action_result.get_status()
 
-        if allow_rule_name == sec_policy_name:
-            # We are the first allow rule, so no need to move
-            return action_result.get_status()
-
-        # move it to the top of the first policy with an allow action
-        data = {"type": "config", "action": "move", "key": self._key, "xpath": xpath, "where": "before", "dst": allow_rule_name}
+        # A connector-owned URL deny rule must precede every allow rule.
+        data = {"type": "config", "action": "move", "key": self._key, "xpath": xpath, "where": "top"}
 
         move_action_result = ActionResult()
 
@@ -354,10 +329,10 @@ class PanConnector(BaseConnector):
     def _add_security_policy(self, vsys, action_result, type, name=None, use_source=False, block_ip_grp=None):
         if use_source:
             sec_policy_name = SEC_POL_NAME_SRC.format(type=type)
-            element = SEC_POL_DEF_ELEMS_SRC
+            element = SEC_POL_DENY_DEF_ELEMS_SRC
         else:
             sec_policy_name = SEC_POL_NAME.format(type=type)
-            element = SEC_POL_DEF_ELEMS
+            element = SEC_POL_DENY_DEF_ELEMS
 
         if self._major_version > 9:
             element += "<source-hip><member>any</member></source-hip><destination-hip><member>any</member></destination-hip>"
@@ -409,7 +384,11 @@ class PanConnector(BaseConnector):
     def _commit_config(self, action_result):
         self.debug_print("Committing the config")
 
-        data = {"type": "commit", "cmd": "<commit></commit>", "key": self._key}
+        data = {
+            "type": "commit",
+            "cmd": f"<commit><partial><admin><member>{xml_escape(self._username)}</member></admin></partial></commit>",
+            "key": self._key,
+        }
 
         status = self._make_rest_call(data, action_result)
 
@@ -491,15 +470,15 @@ class PanConnector(BaseConnector):
         self.debug_print("Removing the blocked URL")
 
         block_url = param[PAN_JSON_URL]
+        for category_member in self._url_category_members(block_url)[0]:
+            xpath = f"{URL_CAT_XPATH.format(vsys=vsys, url_category_name=BLOCK_URL_CAT_NAME)}{DEL_URL_XPATH.format(url=category_member)}"
 
-        xpath = f"{URL_CAT_XPATH.format(vsys=vsys, url_category_name=BLOCK_URL_CAT_NAME)}{DEL_URL_XPATH.format(url=block_url)}"
+            data = {"type": "config", "action": "delete", "key": self._key, "xpath": xpath}
 
-        data = {"type": "config", "action": "delete", "key": self._key, "xpath": xpath}
+            status = self._make_rest_call(data, action_result)
 
-        status = self._make_rest_call(data, action_result)
-
-        if phantom.is_fail(status):
-            return action_result.get_status()
+            if phantom.is_fail(status):
+                return action_result.get_status()
 
         # Now Commit the config
         status = self._commit_config(action_result)
@@ -518,26 +497,13 @@ class PanConnector(BaseConnector):
 
         self.debug_print("Creating custom URL category")
         block_url = param[PAN_JSON_URL]
+        category_members, is_pathful_url = self._url_category_members(block_url)
         data = {
             "type": "config",
             "action": "set",
             "key": self._key,
             "xpath": URL_CAT_XPATH.format(vsys=vsys, url_category_name=BLOCK_URL_CAT_NAME),
-            "element": URL_CAT_ELEM.format(url=xml_escape(block_url)),
-        }
-
-        status = self._make_rest_call(data, action_result)
-
-        if phantom.is_fail(status):
-            return action_result.get_status()
-
-        self.debug_print("Adding URL category to URL filtering profile")
-        data = {
-            "type": "config",
-            "action": "set",
-            "key": self._key,
-            "xpath": URL_PROF_XPATH.format(vsys=vsys, url_profile_name=BLOCK_URL_PROF_NAME),
-            "element": URL_PROF_ELEM.format(url_category_name=BLOCK_URL_CAT_NAME),
+            "element": URL_CAT_ELEM.format(members="".join(URL_CAT_MEMBER_ELEM.format(url=xml_escape(member)) for member in category_members)),
         }
 
         status = self._make_rest_call(data, action_result)
@@ -554,7 +520,29 @@ class PanConnector(BaseConnector):
         # Now Commit the config
         status = self._commit_config(action_result)
 
+        if not phantom.is_fail(status) and is_pathful_url:
+            action_result.append_to_message("Warning: the pathful URL was blocked exactly as supplied; its host and subdomains are not covered.")
+        if not phantom.is_fail(status) and self._sec_policy:
+            action_result.append_to_message(
+                "The sec_policy parameter is no longer used; the connector URL deny policy is moved to the top of the rulebase."
+            )
+
         return action_result.get_status()
+
+    def _url_category_members(self, url):
+        """Return category members and whether the input intentionally remains path-specific."""
+        candidate = url.strip()
+        parsed = urlsplit(candidate if "://" in candidate else f"//{candidate}")
+        host = parsed.hostname
+
+        if host and parsed.path in ("", "/") and not parsed.query and not parsed.fragment:
+            try:
+                ipaddress.ip_address(host)
+            except ValueError:
+                return (f"{host}/", f"*.{host}/"), False
+            return (f"{host}/",), False
+
+        return (url,), True
 
     def _unblock_application(self, param):
         action_result = self.add_action_result(ActionResult(dict(param)))
@@ -621,8 +609,6 @@ class PanConnector(BaseConnector):
     def _get_addr_name(self, ip):
         # Remove the slash in the ip if present, PAN does not like slash in the names
         rem_slash = lambda x: re.sub(r"(.*)/(.*)", r"\1 mask \2", x)
-        if self._ip_type == "ip-wildcard":
-            rem_slash = lambda x: re.sub(r"(.*)/(.*)", r"\1 wildcard mask \2", x)
 
         new_ip = ip.replace("-", " - ").replace(":", "-")
         if not new_ip[0].isalnum():
@@ -637,14 +623,26 @@ class PanConnector(BaseConnector):
         return name
 
     def find_ip_type(self, ip):
+        self._ip_type = None
         if ip.find("/") != -1:
             try:
-                int(ip.split("/")[1])
-                self._ip_type = "ip-netmask"
-            except Exception:
-                self._ip_type = "ip-wildcard"
+                network = ipaddress.ip_network(ip, strict=False)
+            except ValueError:
+                return
+            if network.prefixlen == 0:
+                return
+            self._ip_type = "ip-netmask"
         elif ip.find("-") != -1:
-            self._ip_type = "ip-range"
+            try:
+                start, end = ip.split("-", 1)
+                start_ip = ipaddress.ip_address(start)
+                end_ip = ipaddress.ip_address(end)
+            except ValueError:
+                if phantom.is_hostname(ip):
+                    self._ip_type = "fqdn"
+                return
+            if start_ip.version == end_ip.version and int(start_ip) <= int(end_ip):
+                self._ip_type = "ip-range"
         elif self._is_ip(ip):
             self._ip_type = "ip-netmask"
         elif phantom.is_hostname(ip):
@@ -678,11 +676,7 @@ class PanConnector(BaseConnector):
 
         address_xpath = IP_ADDR_XPATH.format(vsys=vsys, ip_addr_name=name)
 
-        if self._ip_type == "ip-wildcard":
-            # Wildcards do not support tags
-            element = IP_ADDR_ELEM_WITHOUT_TAG.format(type=self._ip_type, ip=block_ip)
-        else:
-            element = IP_ADDR_ELEM.format(type=self._ip_type, ip=block_ip, tag=tag)
+        element = IP_ADDR_ELEM.format(type=self._ip_type, ip=block_ip, tag=tag)
 
         data = {"type": "config", "action": "set", "key": self._key, "xpath": address_xpath, "element": element}
 
@@ -728,12 +722,8 @@ class PanConnector(BaseConnector):
 
         addr_name = self._get_addr_name(unblock_ip)
 
-        if self._ip_type == "ip-wildcard":
-            # Remove the entry of the IP from the rule
-            xpath = f"{SEC_POL_XPATH.format(vsys=vsys, sec_policy_name=sec_policy_name)}/{entry_type}/member[text()='{addr_name}']"
-        else:
-            # Remove the entry of the IP from the address group
-            xpath = f"{ADDR_GRP_XPATH.format(vsys=vsys, ip_group_name=block_ip_grp)}{DEL_ADDR_GRP_XPATH.format(addr_name=addr_name)}"
+        # Remove the entry of the IP from the address group
+        xpath = f"{ADDR_GRP_XPATH.format(vsys=vsys, ip_group_name=block_ip_grp)}{DEL_ADDR_GRP_XPATH.format(addr_name=addr_name)}"
 
         # Remove the address from the phantom address group
         data = {"type": "config", "action": "delete", "key": self._key, "xpath": xpath}
@@ -780,23 +770,19 @@ class PanConnector(BaseConnector):
             return action_result.get_status()
 
         self.debug_print(f"IP type: {self._ip_type}")
-        if self._ip_type == "ip-wildcard":
-            # Wildcard IP has to be added to the security policy rule
-            block_ip_grp = addr_name
-        else:
-            # Add the address to the phantom address group
-            data = {
-                "type": "config",
-                "action": "set",
-                "key": self._key,
-                "xpath": ADDR_GRP_XPATH.format(vsys=vsys, ip_group_name=block_ip_grp),
-                "element": ADDR_GRP_ELEM.format(addr_name=addr_name),
-            }
+        # Add the address to the phantom address group
+        data = {
+            "type": "config",
+            "action": "set",
+            "key": self._key,
+            "xpath": ADDR_GRP_XPATH.format(vsys=vsys, ip_group_name=block_ip_grp),
+            "element": ADDR_GRP_ELEM.format(addr_name=addr_name),
+        }
 
-            status = self._make_rest_call(data, action_result)
+        status = self._make_rest_call(data, action_result)
 
-            if phantom.is_fail(status):
-                return action_result.get_status()
+        if phantom.is_fail(status):
+            return action_result.get_status()
 
         # Create the policy
         status = self._add_security_policy(vsys, action_result, SEC_POL_IP_TYPE, use_source=use_source, block_ip_grp=block_ip_grp)

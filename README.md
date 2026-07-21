@@ -34,13 +34,13 @@ VARIABLE | REQUIRED | TYPE | DESCRIPTION
 -------- | -------- | ---- | -----------
 **device** | required | string | Device IP/Hostname |
 **verify_server_cert** | optional | boolean | Verify server certificate |
-**username** | required | string | Username |
+**username** | required | string | Username used for API authentication and administrator-scoped commits |
 **password** | required | password | Password |
 
 ### Supported Actions
 
 [test connectivity](#action-test-connectivity) - Validate the asset configuration for connectivity <br>
-[block url](#action-block-url) - Block an URL <br>
+[block url](#action-block-url) - Block a URL; bare hosts also block their subdomains, while pathful URLs remain exact <br>
 [unblock url](#action-unblock-url) - Unblock an URL <br>
 [block application](#action-block-application) - Block an application <br>
 [unblock application](#action-unblock-application) - Unblock an application <br>
@@ -65,12 +65,12 @@ No Output
 
 ## action: 'block url'
 
-Block an URL
+Block a URL; bare hosts also block their subdomains, while pathful URLs remain exact
 
 Type: **contain** <br>
 Read only: **False**
 
-This action does the following to block an URL:<ul><li>Create an URL category object named <b>Phantom URL Category</b>, if not found.</li><li>Add the URL to block to this category.</li><li>Create an URL Filtering profile object named <b>Phantom URL List</b>, if not found.</li><li>Add the Phantom URL Category to this profile.</li><li>Re-Configure the policy <b>Phantom URL Security Policy</b> to use the created URL Filtering profile.<br>The policy is created if not found.</li><li>Move the policy above the <b>sec_policy</b> if specified, else move it before the first detected <i>allow</i> policy.</li><li>The action then proceeds to <b>commit</b> the changes.</li></ul>NOTE: Multiple <b>block url</b> actions will <i>not</i> result in multiple categories/policies.<br>The <b>Phantom URL Security Policy</b> policy is created with the following properties:<br><ul><li>from: any</li><li>to: any</li><li>source: any</li><li>destination: any</li><li>source-user: any</li><li>category: any</li><li>service: application-default</li><li>hip-profiles: any / source-hip: any, destination-hip: any</li><li>description: Created by Phantom, please don't edit</li><li>action: allow</li><li>application: any</li></ul>.
+This action adds the URL to the <b>Phantom URL Category</b>, then creates or migrates the connector-owned <b>Phantom URL Security Policy</b> into a top-priority deny rule that matches that category before committing the changes. The rule remains as an inert deny rule when its category is empty. Bare hosts block both the apex and subdomains; pathful URLs remain exact. The legacy <b>sec_policy</b> parameter is ignored because the deny rule is always moved to the top of the rulebase.
 
 #### Action Parameters
 
@@ -78,7 +78,7 @@ PARAMETER | REQUIRED | DESCRIPTION | TYPE | CONTAINS
 --------- | -------- | ----------- | ---- | --------
 **url** | required | URL to block | string | `url` `domain` |
 **vsys** | optional | Virtual system (vsys) to configure | string | |
-**sec_policy** | optional | Insert above this policy | string | |
+**sec_policy** | optional | Deprecated and ignored; the connector URL deny policy is always moved to the top of the rulebase | string | |
 
 #### Action Output
 
@@ -131,7 +131,7 @@ Block an application
 Type: **contain** <br>
 Read only: **False**
 
-This action uses a multistep approach to block an application:<ul><li>Create an application group named <b>Phantom App List</b> if not found.</li>Add the application to block to this group</li><li>Configure the application group as the <i>application</i> to the policy named <b>Phantom App Security Policy</b>.<br>The policy is created if not found on the device.</li><li>The action then proceeds to <b>commit</b> the changes.</li></ul>NOTE: Multiple <b>block application</b> actions will <i>not</i> result in multiple policies or groups. Instead the same App policy and group will be updated.<br>The <b>Phantom App Security Policy</b> policy is created with the following properties:<br><ul><li>from: any</li><li>to: any</li><li>source: any</li><li>destination: any</li><li>source-user: any</li><li>category: any</li><li>service: application-default</li><li>hip-profiles: any / source-hip: any, destination-hip: any</li><li>description: Created by Phantom, please don't edit</li><li>action: deny</li><li>application: <b>Phantom App List</b></li></ul><br>If the action parameter <b>vsys</b> is not specified then <b>'vsys1'</b> is used by default.
+This action uses a multistep approach to block an application:<ul><li>Create an application group named <b>Phantom App List</b> if not found.</li>Add the application to block to this group</li><li>Configure the application group as the <i>application</i> to the policy named <b>Phantom App Security Policy</b>.<br>The policy is created if not found on the device.</li><li>The action then proceeds to <b>commit</b> the changes.</li></ul>NOTE: Multiple <b>block application</b> actions will <i>not</i> result in multiple policies or groups. Instead the same App policy and group will be updated.<br>The <b>Phantom App Security Policy</b> policy is created with the following properties:<br><ul><li>from: any</li><li>to: any</li><li>source: any</li><li>destination: any</li><li>source-user: any</li><li>category: any</li><li>service: any</li><li>hip-profiles: any / source-hip: any, destination-hip: any</li><li>description: Created by Phantom, please don't edit</li><li>action: deny</li><li>application: <b>Phantom App List</b></li></ul><br>If the action parameter <b>vsys</b> is not specified then <b>'vsys1'</b> is used by default.
 
 #### Action Parameters
 
@@ -189,7 +189,7 @@ Block an IP
 Type: **contain** <br>
 Read only: **False**
 
-This action uses a multistep approach to block an IP. It behaves differently based upon whether <b>is_source_address</b> is true or not. By default, it is false. The approach is:<ul><li>Create an address entry with the specified IP address<li>The container id of the phantom action is added as a tag to the address entry when it's created<li>If <b>is_source_address</b> is false:<br><ul><li>add this entry to an address group called <b>Phantom Network List</b></li><li>configure the address group as a <i>destination</i> to the policy named <b>Phantom IP Security Policy</b>.<br>The <b>Phantom IP Security Policy</b> policy is created with the following properties:<br><ul><li>from: any<li>to: any<li>source: any<li>destination: <b>Phantom Network List</b><li>source-user: any<li>category: any<li>service: application-default<li>hip-profiles: any / source-hip: any, destination-hip: any<li>description: Created by Phantom, please don't edit<li>action: deny<li>application: any</ul></li></ul>If <b>is_source_address</b> is true:<br><ul><li>add this entry to an address group called <b>Phantom Network List Source</b><li>configure the address group as a <i>source</i> to the policy named <b>Phantom src IP Security Policy.</b>The <b>Phantom src IP Security Policy</b> policy is created with the following properties:<br><ul><li>from: any<li>to: any<li>source: <b>Phantom Network List Source</b><li>destination: any<li>source-user: any<li>category: any<li>service: application-default<li>hip-profiles: any / source-hip: any, destination-hip: any<li>description: Created by Phantom, please don't edit<li>action: deny<li>application: any</ul></li></ul><li>The policy is created if not found on the device.</li><li>The action then proceeds to <b>commit</b> the changes.</ul>NOTE: If the IP is of type wildcard mask, the address object is created without a tag and is directly added to the security policy. Multiple <b>block ip</b> actions will <i>not</i> result in multiple policies or groups.<br>If the action parameter <b>vsys</b> is not specified then <b>'vsys1'</b> is used by default.
+This action uses a multistep approach to block an IP. It behaves differently based upon whether <b>is_source_address</b> is true or not. By default, it is false. The approach is:<ul><li>Create an address entry with the specified IP address<li>The container id of the phantom action is added as a tag to the address entry when it's created<li>If <b>is_source_address</b> is false:<br><ul><li>add this entry to an address group called <b>Phantom Network List</b></li><li>configure the address group as a <i>destination</i> to the policy named <b>Phantom IP Security Policy</b>.<br>The <b>Phantom IP Security Policy</b> policy is created with the following properties:<br><ul><li>from: any<li>to: any<li>source: any<li>destination: <b>Phantom Network List</b><li>source-user: any<li>category: any<li>service: any<li>hip-profiles: any / source-hip: any, destination-hip: any<li>description: Created by Phantom, please don't edit<li>action: deny<li>application: any</ul></li></ul>If <b>is_source_address</b> is true:<br><ul><li>add this entry to an address group called <b>Phantom Network List Source</b><li>configure the address group as a <i>source</i> to the policy named <b>Phantom src IP Security Policy.</b>The <b>Phantom src IP Security Policy</b> policy is created with the following properties:<br><ul><li>from: any<li>to: any<li>source: <b>Phantom Network List Source</b><li>destination: any<li>source-user: any<li>category: any<li>service: any<li>hip-profiles: any / source-hip: any, destination-hip: any<li>description: Created by Phantom, please don't edit<li>action: deny<li>application: any</ul></li></ul><li>The policy is created if not found on the device.</li><li>The action then proceeds to <b>commit</b> the changes.</ul>NOTE: CIDR /0 and wildcard masks are rejected. Multiple <b>block ip</b> actions will <i>not</i> result in multiple policies or groups.<br>If the action parameter <b>vsys</b> is not specified then <b>'vsys1'</b> is used by default.
 
 #### Action Parameters
 
@@ -220,7 +220,7 @@ Unblock an IP
 Type: **correct** <br>
 Read only: **False**
 
-</p>This action removes the IP from a specific Address Group depending upon whether <b>is_source_address</b> is true.  By default, it is false.</p>if <b>is_source_address</b> is false:<ul><li>This action removes the IP from the <b>Phantom Network List</b> Address Group.</li></ul>If <b>is_source_address</b> is true:<ul><li>This action removes the IP from the <b>Phantom Network Source list</b> Address Group.</li></ul><p>Afterwards, the action proceeds to <b>commit</b> the configuration.<br>If the action parameter <b>vsys</b> is not specified then <b>'vsys1'</b> is used by default.<br/> NOTE: If the IP is of type wildcard mask, the action removes the IP from the security policy.
+</p>This action removes the IP from a specific Address Group depending upon whether <b>is_source_address</b> is true.  By default, it is false.</p>if <b>is_source_address</b> is false:<ul><li>This action removes the IP from the <b>Phantom Network List</b> Address Group.</li></ul>If <b>is_source_address</b> is true:<ul><li>This action removes the IP from the <b>Phantom Network Source list</b> Address Group.</li></ul><p>Afterwards, the action proceeds to <b>commit</b> the configuration.<br>If the action parameter <b>vsys</b> is not specified then <b>'vsys1'</b> is used by default.<br/> NOTE: CIDR /0 and wildcard masks are rejected.
 
 #### Action Parameters
 
