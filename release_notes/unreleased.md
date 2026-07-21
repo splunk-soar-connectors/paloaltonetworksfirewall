@@ -4,3 +4,4 @@
 * Use service any for connector-created IP and application containment deny rules.
 * Migrate the connector URL policy to a top-priority category-scoped deny rule that remains inert when empty.
 * Reject CIDR /0 and IP wildcard masks while continuing to support valid IP addresses, ranges, and CIDRs.
+* Commit only the candidate configuration changes made by the configured connector administrator.

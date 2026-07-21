@@ -384,7 +384,13 @@ class PanConnector(BaseConnector):
     def _commit_config(self, action_result):
         self.debug_print("Committing the config")
 
-        data = {"type": "commit", "cmd": "<commit></commit>", "key": self._key}
+        data = {
+            "type": "commit",
+            "cmd": "<commit><partial><admin><member>{}</member></admin></partial></commit>".format(
+                xml_escape(self._username)
+            ),
+            "key": self._key,
+        }
 
         status = self._make_rest_call(data, action_result)
 
