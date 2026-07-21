@@ -386,9 +386,7 @@ class PanConnector(BaseConnector):
 
         data = {
             "type": "commit",
-            "cmd": "<commit><partial><admin><member>{}</member></admin></partial></commit>".format(
-                xml_escape(self._username)
-            ),
+            "cmd": f"<commit><partial><admin><member>{xml_escape(self._username)}</member></admin></partial></commit>",
             "key": self._key,
         }
 
@@ -473,13 +471,9 @@ class PanConnector(BaseConnector):
 
         block_url = param[PAN_JSON_URL]
         for category_member in self._url_category_members(block_url)[0]:
-            xpath = "{0}{1}".format(URL_CAT_XPATH.format(vsys=vsys, url_category_name=BLOCK_URL_CAT_NAME),
-                    DEL_URL_XPATH.format(url=category_member))
+            xpath = f"{URL_CAT_XPATH.format(vsys=vsys, url_category_name=BLOCK_URL_CAT_NAME)}{DEL_URL_XPATH.format(url=category_member)}"
 
-            data = {'type': 'config',
-                    'action': 'delete',
-                    'key': self._key,
-                    'xpath': xpath}
+            data = {"type": "config", "action": "delete", "key": self._key, "xpath": xpath}
 
             status = self._make_rest_call(data, action_result)
 
@@ -504,13 +498,13 @@ class PanConnector(BaseConnector):
         self.debug_print("Creating custom URL category")
         block_url = param[PAN_JSON_URL]
         category_members, is_pathful_url = self._url_category_members(block_url)
-        data = {'type': 'config',
-                'action': 'set',
-                'key': self._key,
-                'xpath': URL_CAT_XPATH.format(vsys=vsys, url_category_name=BLOCK_URL_CAT_NAME),
-                'element': URL_CAT_ELEM.format(
-                    members="".join(URL_CAT_MEMBER_ELEM.format(url=xml_escape(member)) for member in category_members)
-                )}
+        data = {
+            "type": "config",
+            "action": "set",
+            "key": self._key,
+            "xpath": URL_CAT_XPATH.format(vsys=vsys, url_category_name=BLOCK_URL_CAT_NAME),
+            "element": URL_CAT_ELEM.format(members="".join(URL_CAT_MEMBER_ELEM.format(url=xml_escape(member)) for member in category_members)),
+        }
 
         status = self._make_rest_call(data, action_result)
 
@@ -527,9 +521,7 @@ class PanConnector(BaseConnector):
         status = self._commit_config(action_result)
 
         if not phantom.is_fail(status) and is_pathful_url:
-            action_result.append_to_message(
-                "Warning: the pathful URL was blocked exactly as supplied; its host and subdomains are not covered."
-            )
+            action_result.append_to_message("Warning: the pathful URL was blocked exactly as supplied; its host and subdomains are not covered.")
         if not phantom.is_fail(status) and self._sec_policy:
             action_result.append_to_message(
                 "The sec_policy parameter is no longer used; the connector URL deny policy is moved to the top of the rulebase."
@@ -540,15 +532,15 @@ class PanConnector(BaseConnector):
     def _url_category_members(self, url):
         """Return category members and whether the input intentionally remains path-specific."""
         candidate = url.strip()
-        parsed = urlsplit(candidate if '://' in candidate else '//{}'.format(candidate))
+        parsed = urlsplit(candidate if "://" in candidate else f"//{candidate}")
         host = parsed.hostname
 
-        if host and parsed.path in ('', '/') and not parsed.query and not parsed.fragment:
+        if host and parsed.path in ("", "/") and not parsed.query and not parsed.fragment:
             try:
                 ipaddress.ip_address(host)
             except ValueError:
-                return ('{}/'.format(host), '*.{}/'.format(host)), False
-            return ('{}/'.format(host),), False
+                return (f"{host}/", f"*.{host}/"), False
+            return (f"{host}/",), False
 
         return (url,), True
 
@@ -642,7 +634,7 @@ class PanConnector(BaseConnector):
             self._ip_type = "ip-netmask"
         elif ip.find("-") != -1:
             try:
-                start, end = ip.split('-', 1)
+                start, end = ip.split("-", 1)
                 start_ip = ipaddress.ip_address(start)
                 end_ip = ipaddress.ip_address(end)
             except ValueError:
