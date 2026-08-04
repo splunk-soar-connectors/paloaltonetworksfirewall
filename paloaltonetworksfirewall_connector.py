@@ -880,7 +880,10 @@ class PanConnector(BaseConnector):
             result_data = action_result.get_data().pop(0)
             applications = result_data.get("application")
             if applications:
-                results.extend(result_data["application"]["entry"])
+                entries = applications["entry"]
+                if isinstance(entries, dict):
+                    entries = [entries]
+                results.extend(entries)
         except Exception as e:
             self.error_print("Handled exception while parsing predefined applications response", e)
             return action_result.set_status(phantom.APP_ERROR, PAN_ERR_APP_RESPONSE)
@@ -901,7 +904,10 @@ class PanConnector(BaseConnector):
             result_data = action_result.get_data().pop(0)
             applications = result_data.get("application")
             if applications:
-                results.extend(result_data["application"]["entry"])
+                entries = applications["entry"]
+                if isinstance(entries, dict):
+                    entries = [entries]
+                results.extend(entries)
         except Exception as e:
             self.error_print("Handled exception while parsing custom applications response", e)
             return action_result.set_status(phantom.APP_ERROR, PAN_ERR_APP_RESPONSE)
