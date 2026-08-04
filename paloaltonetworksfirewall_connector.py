@@ -19,9 +19,10 @@ import ipaddress
 import json
 import re
 import time
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 from xml.sax.saxutils import escape as xml_escape
 
+import idna
 import phantom.app as phantom
 import requests
 import xmltodict
@@ -469,7 +470,11 @@ class PanConnector(BaseConnector):
 
         self.debug_print("Removing the blocked URL")
 
-        block_url = param[PAN_JSON_URL]
+        try:
+            block_url = self._normalize_idn_url(param[PAN_JSON_URL])
+        except ValueError as e:
+            return action_result.set_status(phantom.APP_ERROR, str(e))
+
         for category_member in self._url_category_members(block_url)[0]:
             xpath = f"{URL_CAT_XPATH.format(vsys=vsys, url_category_name=BLOCK_URL_CAT_NAME)}{DEL_URL_XPATH.format(url=category_member)}"
 
@@ -496,7 +501,11 @@ class PanConnector(BaseConnector):
         self._sec_policy = param.get(PAN_JSON_SEC_POLICY)
 
         self.debug_print("Creating custom URL category")
-        block_url = param[PAN_JSON_URL]
+        try:
+            block_url = self._normalize_idn_url(param[PAN_JSON_URL])
+        except ValueError as e:
+            return action_result.set_status(phantom.APP_ERROR, str(e))
+
         category_members, is_pathful_url = self._url_category_members(block_url)
         data = {
             "type": "config",
@@ -543,6 +552,40 @@ class PanConnector(BaseConnector):
             return (f"{host}/",), False
 
         return (url,), True
+
+    def _normalize_idn_url(self, url):
+        """Convert non-ASCII hostname labels to their UTS #46 A-label form."""
+        if url.isascii():
+            return url
+
+        has_authority_prefix = url.startswith("//")
+        has_scheme = "://" in url
+        parsed = urlsplit(url if has_scheme or has_authority_prefix else f"//{url}")
+        if not parsed.hostname:
+            raise ValueError("The URL hostname is invalid")
+        if parsed.hostname.isascii():
+            return url
+
+        userinfo, separator, host_and_port = parsed.netloc.rpartition("@")
+        prefix = f"{userinfo}{separator}" if separator else ""
+        port_suffix = ""
+        if parsed.port is not None:
+            host_text, port_text = host_and_port.rsplit(":", 1)
+            port_suffix = f":{port_text}"
+        else:
+            host_text = host_and_port
+
+        try:
+            normalized_labels = [
+                idna.encode(label, uts46=True).decode("ascii") if label and not label.isascii() else label for label in host_text.split(".")
+            ]
+        except idna.IDNAError as e:
+            raise ValueError("The URL hostname is not a valid internationalized domain name") from e
+
+        normalized = urlunsplit(parsed._replace(netloc=f"{prefix}{'.'.join(normalized_labels)}{port_suffix}"))
+        if not has_scheme and not has_authority_prefix:
+            return normalized.removeprefix("//")
+        return normalized
 
     def _unblock_application(self, param):
         action_result = self.add_action_result(ActionResult(dict(param)))
