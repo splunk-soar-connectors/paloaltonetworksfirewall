@@ -19,9 +19,10 @@ import ipaddress
 import json
 import re
 import time
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 from xml.sax.saxutils import escape as xml_escape
 
+import idna
 import phantom.app as phantom
 import requests
 import xmltodict
@@ -56,6 +57,7 @@ class PanConnector(BaseConnector):
         self._key = None
         self._sec_policy = None
         self._ip_type = None
+        self._installation_marker = None
 
     def _is_ip(self, input_ip_address):
         try:
@@ -76,7 +78,20 @@ class PanConnector(BaseConnector):
         # Base URL
         self._base_url = f"https://{self._device}/api/"
 
+        try:
+            installation_id = self.get_product_installation_id()
+        except Exception as e:
+            self.error_print("Unable to determine the product installation ID", e)
+            return self.set_status(phantom.APP_ERROR, "Unable to determine the product installation ID")
+        if not installation_id:
+            return self.set_status(phantom.APP_ERROR, "Unable to determine the product installation ID")
+
+        self._installation_marker = hashlib.sha256(str(installation_id).encode("utf-8")).hexdigest()[:8]
+
         return phantom.APP_SUCCESS
+
+    def _scoped_name(self, name):
+        return f"{name} {self._installation_marker}"
 
     def _parse_response_msg(self, response, action_result):
         msg = response.get("msg")
@@ -286,9 +301,9 @@ class PanConnector(BaseConnector):
     def _add_url_security_policy(self, vsys, action_result, type):
         element = SEC_POL_DENY_DEF_ELEMS.replace(
             "<category><member>any</member></category>",
-            URL_CAT_SEC_POL_ELEM.format(url_category_name=BLOCK_URL_CAT_NAME),
+            URL_CAT_SEC_POL_ELEM.format(url_category_name=self._scoped_name(BLOCK_URL_CAT_NAME)),
         )
-        sec_policy_name = SEC_POL_NAME.format(type=type)
+        sec_policy_name = self._scoped_name(SEC_POL_NAME.format(type=type))
 
         self.debug_print(f"Creating security policy: {sec_policy_name}")
         element += ACTION_NODE_DENY
@@ -328,10 +343,10 @@ class PanConnector(BaseConnector):
 
     def _add_security_policy(self, vsys, action_result, type, name=None, use_source=False, block_ip_grp=None):
         if use_source:
-            sec_policy_name = SEC_POL_NAME_SRC.format(type=type)
+            sec_policy_name = self._scoped_name(SEC_POL_NAME_SRC.format(type=type))
             element = SEC_POL_DENY_DEF_ELEMS_SRC
         else:
-            sec_policy_name = SEC_POL_NAME.format(type=type)
+            sec_policy_name = self._scoped_name(SEC_POL_NAME.format(type=type))
             element = SEC_POL_DENY_DEF_ELEMS
 
         if self._major_version > 9:
@@ -469,9 +484,16 @@ class PanConnector(BaseConnector):
 
         self.debug_print("Removing the blocked URL")
 
-        block_url = param[PAN_JSON_URL]
+        try:
+            block_url = self._normalize_idn_url(param[PAN_JSON_URL])
+        except ValueError as e:
+            return action_result.set_status(phantom.APP_ERROR, str(e))
+
         for category_member in self._url_category_members(block_url)[0]:
-            xpath = f"{URL_CAT_XPATH.format(vsys=vsys, url_category_name=BLOCK_URL_CAT_NAME)}{DEL_URL_XPATH.format(url=category_member)}"
+            xpath = (
+                f"{URL_CAT_XPATH.format(vsys=vsys, url_category_name=self._scoped_name(BLOCK_URL_CAT_NAME))}"
+                f"{DEL_URL_XPATH.format(url=category_member)}"
+            )
 
             data = {"type": "config", "action": "delete", "key": self._key, "xpath": xpath}
 
@@ -496,13 +518,17 @@ class PanConnector(BaseConnector):
         self._sec_policy = param.get(PAN_JSON_SEC_POLICY)
 
         self.debug_print("Creating custom URL category")
-        block_url = param[PAN_JSON_URL]
+        try:
+            block_url = self._normalize_idn_url(param[PAN_JSON_URL])
+        except ValueError as e:
+            return action_result.set_status(phantom.APP_ERROR, str(e))
+
         category_members, is_pathful_url = self._url_category_members(block_url)
         data = {
             "type": "config",
             "action": "set",
             "key": self._key,
-            "xpath": URL_CAT_XPATH.format(vsys=vsys, url_category_name=BLOCK_URL_CAT_NAME),
+            "xpath": URL_CAT_XPATH.format(vsys=vsys, url_category_name=self._scoped_name(BLOCK_URL_CAT_NAME)),
             "element": URL_CAT_ELEM.format(members="".join(URL_CAT_MEMBER_ELEM.format(url=xml_escape(member)) for member in category_members)),
         }
 
@@ -544,6 +570,40 @@ class PanConnector(BaseConnector):
 
         return (url,), True
 
+    def _normalize_idn_url(self, url):
+        """Convert non-ASCII hostname labels to their UTS #46 A-label form."""
+        if url.isascii():
+            return url
+
+        has_authority_prefix = url.startswith("//")
+        has_scheme = "://" in url
+        parsed = urlsplit(url if has_scheme or has_authority_prefix else f"//{url}")
+        if not parsed.hostname:
+            raise ValueError("The URL hostname is invalid")
+        if parsed.hostname.isascii():
+            return url
+
+        userinfo, separator, host_and_port = parsed.netloc.rpartition("@")
+        prefix = f"{userinfo}{separator}" if separator else ""
+        port_suffix = ""
+        if parsed.port is not None:
+            host_text, port_text = host_and_port.rsplit(":", 1)
+            port_suffix = f":{port_text}"
+        else:
+            host_text = host_and_port
+
+        try:
+            normalized_labels = [
+                idna.encode(label, uts46=True).decode("ascii") if label and not label.isascii() else label for label in host_text.split(".")
+            ]
+        except idna.IDNAError as e:
+            raise ValueError("The URL hostname is not a valid internationalized domain name") from e
+
+        normalized = urlunsplit(parsed._replace(netloc=f"{prefix}{'.'.join(normalized_labels)}{port_suffix}"))
+        if not has_scheme and not has_authority_prefix:
+            return normalized.removeprefix("//")
+        return normalized
+
     def _unblock_application(self, param):
         action_result = self.add_action_result(ActionResult(dict(param)))
         status = self._get_key(action_result)
@@ -555,7 +615,10 @@ class PanConnector(BaseConnector):
 
         block_app = param[PAN_JSON_APPLICATION]
 
-        xpath = f"{APP_GRP_XPATH.format(vsys=vsys, app_group_name=BLOCK_APP_GROUP_NAME)}{DEL_APP_XPATH.format(app_name=block_app)}"
+        xpath = (
+            f"{APP_GRP_XPATH.format(vsys=vsys, app_group_name=self._scoped_name(BLOCK_APP_GROUP_NAME))}"
+            f"{DEL_APP_XPATH.format(app_name=block_app)}"
+        )
 
         data = {"type": "config", "action": "delete", "key": self._key, "xpath": xpath}
 
@@ -586,7 +649,7 @@ class PanConnector(BaseConnector):
             "type": "config",
             "action": "set",
             "key": self._key,
-            "xpath": APP_GRP_XPATH.format(vsys=vsys, app_group_name=BLOCK_APP_GROUP_NAME),
+            "xpath": APP_GRP_XPATH.format(vsys=vsys, app_group_name=self._scoped_name(BLOCK_APP_GROUP_NAME)),
             "element": APP_GRP_ELEM.format(app_name=xml_escape(block_app)),
         }
 
@@ -596,7 +659,7 @@ class PanConnector(BaseConnector):
             return action_result.get_status()
 
         # Create the policy
-        status = self._add_security_policy(vsys, action_result, SEC_POL_APP_TYPE, BLOCK_APP_GROUP_NAME)
+        status = self._add_security_policy(vsys, action_result, SEC_POL_APP_TYPE, self._scoped_name(BLOCK_APP_GROUP_NAME))
 
         if phantom.is_fail(status):
             return action_result.get_status()
@@ -611,14 +674,15 @@ class PanConnector(BaseConnector):
         rem_slash = lambda x: re.sub(r"(.*)/(.*)", r"\1 mask \2", x)
 
         new_ip = ip.replace("-", " - ").replace(":", "-")
+        address_marker = self._scoped_name(PHANTOM_ADDRESS_NAME)
         if not new_ip[0].isalnum():
-            name = f"{PHANTOM_ADDRESS_NAME} {rem_slash(new_ip)}"
+            name = f"{address_marker} {rem_slash(new_ip)}"
         else:
-            name = f"{rem_slash(new_ip)} {PHANTOM_ADDRESS_NAME}"
+            name = f"{rem_slash(new_ip)} {address_marker}"
 
         # Object name can't exceed 63 characters
         if len(name) > 63:
-            name = hashlib.sha256(ip.encode("utf-8")).hexdigest()[:-1]
+            name = hashlib.sha256(f"{ip} {self._installation_marker}".encode()).hexdigest()[:-1]
 
         return name
 
@@ -712,12 +776,12 @@ class PanConnector(BaseConnector):
         use_source = param.get(PAN_JSON_SOURCE_ADDRESS, PAN_DEFAULT_SOURCE_ADDRESS)
 
         if use_source:
-            block_ip_grp = BLOCK_IP_GROUP_NAME_SRC
-            sec_policy_name = SEC_POL_NAME_SRC.format(type="IP")
+            block_ip_grp = self._scoped_name(BLOCK_IP_GROUP_NAME_SRC)
+            sec_policy_name = self._scoped_name(SEC_POL_NAME_SRC.format(type="IP"))
             entry_type = "source"
         else:
-            block_ip_grp = BLOCK_IP_GROUP_NAME
-            sec_policy_name = SEC_POL_NAME.format(type="IP")
+            block_ip_grp = self._scoped_name(BLOCK_IP_GROUP_NAME)
+            sec_policy_name = self._scoped_name(SEC_POL_NAME.format(type="IP"))
             entry_type = "destination"
 
         addr_name = self._get_addr_name(unblock_ip)
@@ -760,9 +824,9 @@ class PanConnector(BaseConnector):
         use_source = param.get(PAN_JSON_SOURCE_ADDRESS, PAN_DEFAULT_SOURCE_ADDRESS)
 
         if use_source:
-            block_ip_grp = BLOCK_IP_GROUP_NAME_SRC
+            block_ip_grp = self._scoped_name(BLOCK_IP_GROUP_NAME_SRC)
         else:
-            block_ip_grp = BLOCK_IP_GROUP_NAME
+            block_ip_grp = self._scoped_name(BLOCK_IP_GROUP_NAME)
 
         status, addr_name = self._add_address(vsys, block_ip, action_result)
 
@@ -816,7 +880,10 @@ class PanConnector(BaseConnector):
             result_data = action_result.get_data().pop(0)
             applications = result_data.get("application")
             if applications:
-                results.extend(result_data["application"]["entry"])
+                entries = applications["entry"]
+                if isinstance(entries, dict):
+                    entries = [entries]
+                results.extend(entries)
         except Exception as e:
             self.error_print("Handled exception while parsing predefined applications response", e)
             return action_result.set_status(phantom.APP_ERROR, PAN_ERR_APP_RESPONSE)
@@ -837,7 +904,10 @@ class PanConnector(BaseConnector):
             result_data = action_result.get_data().pop(0)
             applications = result_data.get("application")
             if applications:
-                results.extend(result_data["application"]["entry"])
+                entries = applications["entry"]
+                if isinstance(entries, dict):
+                    entries = [entries]
+                results.extend(entries)
         except Exception as e:
             self.error_print("Handled exception while parsing custom applications response", e)
             return action_result.set_status(phantom.APP_ERROR, PAN_ERR_APP_RESPONSE)
